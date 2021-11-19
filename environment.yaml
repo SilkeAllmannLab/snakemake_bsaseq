@@ -11,3 +11,4 @@ dependencies:
   - yaml = 0.2.5
   - snpeff = 5.0
   - parallel-fastq-dump = 0.6.7 
+  - samtools = 1.11
