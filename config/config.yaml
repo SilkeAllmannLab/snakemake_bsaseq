@@ -1,0 +1,35 @@
+---
+# directories
+result_dir:  results/ # should be kept
+working_dir: temp/    # can be removed (temporary files)
+
+# samples to condition
+units: config/samples.tsv
+
+# refs 
+refs:
+  genome:  "config/refs/mutmap_ref.fasta" 
+
+
+##############################
+# fastp: read quality trimming
+#############################
+
+fastp:
+  qualified_quality_phred: 30 # Phred+33 score (> 15 for Proton Ion, > 30 or more for Illumina) 
+
+
+########
+# MutMap
+########
+
+mutmap:
+  window_size: '2000'               # window size in kb (default is 2000) [2000]
+  step_size:   '100'                # step size in kb (default 100) [100]   
+  max_depth:   '250'                # Maximum depth of variants which will be used. This cutoff will be applied in both of cultivar and bulk. [250]
+  min-depth:   '8'                  # Minimum depth of variants which will be used. This cutoff will be applied in both of cultivar and bulk. [8]
+  n-rep:       '5000'               # number of replicates for simulation to make the null distribution [5000]
+  min-mq:      '40'                 # minimum mapping quality in mpileup. [40]
+  min-bq:      '18'                 # minimum base quality in mpileup. [18]
+  n_ind:       '20'                  # number of individuals in the mutant bulk (n_ind = 20 for the test files: https://zenodo.org/record/5710370
+

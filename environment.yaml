@@ -1,0 +1,13 @@
+name: bsaseq
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - mutmap = 2.3.2
+  - snakemake = 5.20.0
+  - fastp = 0.19.5
+  - multiqc = 1.9
+  - yaml = 0.2.5
+  - snpeff = 5.0
+  - parallel-fastq-dump = 0.6.7 
