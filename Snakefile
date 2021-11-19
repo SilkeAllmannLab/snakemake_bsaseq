@@ -61,15 +61,17 @@ def get_trim_names(wildcards):
         inFile = samples.loc[(wildcards.sample), ["fq1", "fq2"]].dropna()
         return "--in1 " + inFile[0] + " --in2 " + inFile[1] + " --out1 " + WORKING_DIR + "trimmed/" + wildcards.sample + "_R1_trimmed.fq.gz --out2 "  + WORKING_DIR + "trimmed/" + wildcards.sample + "_R2_trimmed.fq.gz"
 
-def get_trimmed_files_per_sample_type(trimmed_dir = WORKING_DIR + "trimmed/", sample_type = "cultivar"):
+def get_trimmed_files_per_sample_type(trimmed_dir = WORKING_DIR + "trimmed", sample_type = "cultivar"):
     """
     This function:
       1. Collects the files names of the trimmed files
       2. Filter to keep only the "cultivar" or "bulk" trimmed files.
       3. Returns a list with one or two elements. 
     """
-    if not os.path.isdir(trimmed_dir):
-        os.mkdir(trimmed_dir)
+    if os.path.isdir(trimmed_dir):
+        pass
+    else:
+        os.makedirs(trimmed_dir)
 
     trimmed_files = os.listdir(trimmed_dir) # collects all trimmed files
     trimmed_files.sort()                                 # to have R1 before R2
