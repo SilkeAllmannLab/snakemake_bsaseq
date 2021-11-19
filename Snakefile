@@ -17,6 +17,11 @@ WORKING_DIR = config["working_dir"]
 RESULT_DIR = config["result_dir"]
 
 
+# Clean potential left-over mutmap folders
+if os.path.isdir(WORKING_DIR + "mutmap"):
+    os.rmdir(WORKING_DIR + "mutmap")
+
+
 ########################
 # Samples and conditions
 ########################
@@ -172,7 +177,6 @@ rule mutmap:
         outdir_final          = RESULT_DIR + "mutmap/"
     threads: 10
     shell:
-        "rm -r mutmap;"   # remove potential previous mutmap temp directories
         "mutmap --ref {input.ref_fasta} "
         "--cultivar {params.cultivar_files} "
         "--bulk {params.bulk_files} "          
