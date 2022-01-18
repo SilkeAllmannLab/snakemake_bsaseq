@@ -74,7 +74,7 @@ The reference assembly used is [Sorghum_bicolor_NCBIv3](https://www.ncbi.nlm.nih
 2. Execute the pipeline: `snakemake -j 1` (specify N threads with `-j N`).  
 
 On a cluster managed with SLURM such as the [UvA-FNWI crunchomics](https://crunchomics-documentation.readthedocs.io/en/latest/), if you specify 10 CPUs you can run with:  
-1. `srun --time=12:00:00 --cpu-per-task=10 --mem-per-cpu=8G --pty bash -i`  followed by:  
+1. `srun --time=12:00:00 --cpus-per-task=10 --mem-per-cpu=8G --pty bash -i`  followed by:  
 2. `conda activate bsaseq && snakemake -j 10`
 
 # 3. References 📖
