@@ -69,17 +69,17 @@ def get_trim_names(wildcards):
 def get_trimmed_files_per_sample_type(trimmed_dir = WORKING_DIR + "trimmed", sample_type = "cultivar"):
     """
     This function:
-      1. Collects the files names of the trimmed files
+      1. Collects the files names of the trimmed files inside the trimmed directory
       2. Filter to keep only the "cultivar" or "bulk" trimmed files.
       3. Returns a list with one or two elements. 
     """
     if os.path.isdir(trimmed_dir):
         pass
     else:
-        os.makedirs(trimmed_dir)
+        print("Directory with trimmed file does not exist")
 
     trimmed_files = os.listdir(trimmed_dir) # collects all trimmed files
-    trimmed_files.sort()                                 # to have R1 before R2
+    trimmed_files.sort()                    # to have R1 before R2
 
     cultivar_files = [trimmed_dir + f for f in trimmed_files if sample_type in f]
     bulk_files = [trimmed_dir + f for f in trimmed_files if sample_type in f]
@@ -95,11 +95,13 @@ def get_trimmed_files_per_sample_type(trimmed_dir = WORKING_DIR + "trimmed", sam
 #################
 MULTIQC = RESULT_DIR + "multiqc_report.html"
 MUTMAP_VCF = RESULT_DIR + "mutmap/30_vcf/mutmap.vcf.gz"
+MUTMAP_ANNOTATED_VCF = RESULT_DIR + "snpeff/mutmap_annotated.vcf.gz"
 
 rule all:
     input:
         MULTIQC,
-        MUTMAP_VCF
+        MUTMAP_VCF,
+        MUTMAP_ANNOTATED_VCF
     message:
         "BSA-seq pipeline run complete!"
     shell:
@@ -184,9 +186,31 @@ rule mutmap:
         "--window {params.window_size} "
         "--N-bulk {params.n_individuals} "
         "--out {params.outdir_mutmap};"
-        "mv -f {params.outdir_mutmap} {params.outdir_final}"
+        "cp -r {params.outdir_mutmap} {params.outdir_final}"
 
-       
+
+########
+# snpEff
+########
+
+rule snpeff:
+    input:
+        RESULT_DIR + "mutmap/30_vcf/mutmap.vcf.gz"
+    output:
+        csv = RESULT_DIR + "snp_eff/stats.csv",
+        ann = RESULT_DIR + "snpeff/mutmap_annotated.vcf"
+    message:
+        "Annotating SNPs with snpEff"
+    params:
+        snpeff_db = config["snpeff"]["database"],
+        output_format = config["snpeff"]["output_format"]
+    shell:
+        "snpEff ann "
+        "-o {params.output_format} "
+        "-csvStats "                            # creates CSV summary file instead of HTML
+        "-stats {output.csv} "
+        "{params.snpeff_db} "
+        "{input} > {output.ann}"
 
 ############################
 # Plots of mapping statistics
