@@ -32,7 +32,14 @@ Once `conda` is installed, you can get `mamba` easily in your default (base) con
 
 `conda install mamba -n base -c conda-forge --yes`
 
-## 1.2 Install the Snakemake pipeline dependencies
+## 1.2 Clone the pipeline repository :cat:
+
+From GitHub, copy the repo link: `https://github.com/SilkeAllmannLab/snakemake_bsaseq.git`
+
+Then run `git clone https://github.com/SilkeAllmannLab/snakemake_bsaseq.git` on a cluster e.g. crunchomics. 
+You will now have a folder named "snakemake_bsaseq/" from where all following commands should be run.
+
+## 1.3 Install the Snakemake pipeline dependencies
 
 Place yourself in the `snakemake_bsaseq/` folder and run:  
 
@@ -67,7 +74,7 @@ The reference assembly used is [Sorghum_bicolor_NCBIv3](https://www.ncbi.nlm.nih
 2. Execute the pipeline: `snakemake -j 1` (specify N threads with `-j N`).  
 
 On a cluster managed with SLURM such as the [UvA-FNWI crunchomics](https://crunchomics-documentation.readthedocs.io/en/latest/), if you specify 10 CPUs you can run with:  
-1. `srun --time=12:00:00 --cpu-per-task=10 --mem-per-cpu=8G --pty bash -i`  followed by:  
+1. `srun --time=12:00:00 --cpus-per-task=10 --mem-per-cpu=8G --pty bash -i`  followed by:  
 2. `conda activate bsaseq && snakemake -j 10`
 
 # 3. References 📖
