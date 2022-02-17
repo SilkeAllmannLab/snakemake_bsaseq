@@ -197,8 +197,8 @@ rule snpeff:
     input:
         RESULT_DIR + "mutmap/30_vcf/mutmap.vcf.gz"
     output:
-        csv = RESULT_DIR + "snp_eff/stats.csv",
-        ann = RESULT_DIR + "snpeff/mutmap_annotated.vcf"
+        csv = RESULT_DIR + "snpeff/stats.csv",
+        ann = RESULT_DIR + "snpeff/mutmap_annotated.vcf.gz"
     message:
         "Annotating SNPs with snpEff"
     params:
