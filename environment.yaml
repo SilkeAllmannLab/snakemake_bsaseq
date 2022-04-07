@@ -8,7 +8,7 @@ dependencies:
   - snakemake = 5.20.0
   - fastp = 0.19.5
   - multiqc = 1.11
-  - yaml = 0.2.5
+  - pyyaml = 6.0
   - snpeff = 5.0
   - parallel-fastq-dump = 0.6.7 
   - samtools = 1.14

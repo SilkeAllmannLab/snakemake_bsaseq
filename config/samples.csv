@@ -1,0 +1,3 @@
+﻿sample,sample_type,fq1,fq2
+cultivar,reference,config/fastq/mutmap_cultivar.1.fastq.gz,config/fastq/mutmap_cultivar.2.fastq.gz
+bulk,mutant,config/fastq/mutmap_bulk.1.fastq.gz,config/fastq/mutmap_bulk.2.fastq.gz

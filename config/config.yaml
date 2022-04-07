@@ -2,21 +2,22 @@
 # directories
 result_dir:  results/ # should be kept
 working_dir: temp/    # can be removed (temporary files)
+fastq_dir: config/fastq/ # location of fastq files
 
 # samples to condition
-units: config/samples.tsv
+samples: config/samples.csv
 
 # refs 
-refs:
-  genome:  "config/refs/mutmap_ref.fasta" 
+ref_genome:  "config/refs/mutmap_ref.fasta" 
 
+# threads
+threads: 5
 
 ##############################
 # fastp: read quality trimming
 #############################
 
-fastp:
-  qualified_quality_phred: 30 # Phred+33 score (> 15 for Proton Ion, > 30 or more for Illumina) 
+qualified_quality_phred: 30 # Phred+33 score (> 15 for Proton Ion, > 30 or more for Illumina) 
 
 
 ########

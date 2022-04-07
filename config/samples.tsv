@@ -1,3 +1,0 @@
-sample	fq1	fq2
-cultivar	config/fastq/mutmap_cultivar.1.fastq.gz	config/fastq/mutmap_cultivar.2.fastq.gz
-bulk	config/fastq/mutmap_bulk.1.fastq.gz	config/fastq/mutmap_bulk.2.fastq.gz
