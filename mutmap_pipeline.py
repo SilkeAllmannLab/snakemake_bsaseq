@@ -1,43 +1,10 @@
 #!/usr/bin/env python3
 
+from random import sample
 import yaml
 import pandas as pd
 import os
 import subprocess
-
-##################
-# Helper functions
-##################
-def sample_is_single_end(sample):
-    """This function detect missing value in the column 2 of the units.tsv"""
-    if "fq2" not in samples_df.columns:
-        return True
-    else:
-        return pd.isnull(samples_df.loc[(sample), "fq2"])
-
-def get_trimmed_files_per_sample_type(trimmed_dir = "trimmed", sample_type = "cultivar"):
-    """
-    This function:
-      1. Collects the files names of the trimmed files inside the trimmed directory
-      2. Filter to keep only the "cultivar" or "bulk" trimmed files.
-      3. Returns a list with one or two elements. 
-    """
-    if os.path.isdir(trimmed_dir):
-        pass
-    else:
-        print("Directory with trimmed file does not exist")
-
-    trimmed_files = os.listdir(trimmed_dir) # collects all trimmed files
-    trimmed_files.sort()                    # to have R1 before R2
-
-    cultivar_files = [trimmed_dir + f for f in trimmed_files if sample_type in f]
-    bulk_files = [trimmed_dir + f for f in trimmed_files if sample_type in f]
-    if sample_type == "cultivar":
-        return ",".join(cultivar_files) # fastq of cultivar. If you specify fastq, please separate pairs by comma, e.g. -b fastq1,fastq2.
-    elif sample_type == "bulk":
-        return ",".join(bulk_files)     # fastq of mutant bulk. If you specify fastq, please separate pairs by comma, e.g. -b fastq1,fastq2.
-    else:
-        "Please check that sample_type == 'cultivar' or sample_type == 'bulk'"
 
 ############################
 # Import pipeline parameters
@@ -50,17 +17,20 @@ RESULT_DIR = parameter_values["result_dir"]
 WORKING_DIR = parameter_values["working_dir"]
 FASTQ_DIR = parameter_values["fastq_dir"]
 TRIMMED_DIR = WORKING_DIR + "trimmed/"
+MUTMAP_DIR = RESULT_DIR + "mutmap/"
 
 # Create directories
 os.makedirs(RESULT_DIR, exist_ok=True)
 os.makedirs(WORKING_DIR, exist_ok=True)
 os.makedirs(TRIMMED_DIR, exist_ok=True)
+os.makedirs(RESULT_DIR + "fastp/", exist_ok=True)
 
 # FASTP parameters
 TRIMMING_THRESHOLD = str(parameter_values["qualified_quality_phred"]) # convert to string for subprocess call bash command 
 
 # MUTMAP parameters
 REF_GENOME_FASTA = parameter_values["ref_genome"]
+MEM_MUTMAP = "1G"
 
 # General parameters
 THREADS = str(parameter_values["threads"])
@@ -72,12 +42,96 @@ THREADS = str(parameter_values["threads"])
 # Import list of samples
 ########################
 
-samples_df = pd.read_csv(parameter_values["samples"], index_col = "sample")
+samples_df = pd.read_csv(parameter_values["samples"], index_col = "sample_name")
 samples = samples_df.index.to_list()
 
-###############
-# Read trimming
-###############
+
+##################
+# Helper functions
+##################
+def sample_is_single_end(sample):
+    """This function detect missing value in the column 2 of the units.tsv"""
+    if "fq2" not in samples_df.columns:
+        return True
+    else:
+        return pd.isnull(samples_df.loc[(sample), "fq2"])
+
+def get_trimmed_files_of_reference_sample():
+    """
+    This function re-creates the path to the trimmed files of the reference sample.
+ 
+    Returns
+    -------
+    A string with the ',' and the reference trimmed file path (input for MutMap)
+    """
+    # Verify that 'reference' is in the 'sample_type' column of the Pandas samples_df
+    sample_types = samples_df.sample_type.unique()
+    if "reference" not in sample_types:
+        raise ValueError("sample type should be either equal to 'reference' or 'mutant'")
+    
+    # Get the sample name corresponding to the reference sample
+    ref_sample_name = samples_df.query("sample_type == 'reference'").index.values[0]
+
+    # Re-create the path of the trimmed file
+    if sample_is_single_end(ref_sample_name):
+        trimmed_files = ",".join(TRIMMED_DIR + ref_sample_name + "_trimmed_R1.fq")
+    else:
+        trimmed_files = ",".join([TRIMMED_DIR + ref_sample_name + "_trimmed_R1.fq", TRIMMED_DIR + ref_sample_name + "_trimmed_R2.fq"]) 
+    
+    return trimmed_files
+
+def get_trimmed_files_of_sample(sample):
+    """
+    This function:
+      1. Re-creates the files names of the trimmed files for a given mutant file 
+      2. Returns a list with one or two elements. 
+
+    Parameters
+    ---------
+    sample: str
+      name of the sample as given in the sample_name column of the 'samples.csv' file
+
+    Returns
+    -------
+    A string of the path to trimmed file(s) names with a comma ',' as separator for the files (input for MutMap)
+    """
+    # Verify that the sample have 'mutant' specified as sample_type
+    if samples_df.loc[sample_name, "sample_type"] != "mutant":
+        raise ValueError("Please verify that sample ", sample, " has 'mutant' specified as 'sample_type")
+    else:
+        # Re-create the path of the trimmed file
+        if sample_is_single_end(sample):
+            trimmed_files = ",".join(TRIMMED_DIR + sample + "_trimmed_R1.fq")
+        else:
+            trimmed_files = ",".join([TRIMMED_DIR + sample + "_trimmed_R1.fq", TRIMMED_DIR + sample + "_trimmed_R2.fq"]) 
+    return trimmed_files
+
+def get_number_of_individuals(sample):
+    """
+    Imports the samples .csv dataframe Returns the number of mutant individuals used for sequencing
+    
+    Parameter
+    ---------
+    sample: str
+        The name of the mutant used to return its corresponding number of individuals
+    
+    Returns
+    -------
+    An integer corresponding to the number of individuals
+    """
+    if sample not in samples:
+        raise NameError(sample," is not an element of your list of samples (sample_name column in .csv)")
+
+    n_ind = int(samples_df.loc[sample, "n_individuals"])
+    return n_ind 
+
+################
+# Pipeline steps
+################
+        
+###################
+# 01. Read trimming
+###################
 
 for sample_name in samples:
     print("################################")
@@ -86,34 +140,42 @@ for sample_name in samples:
     original_fastq_forward = samples_df.loc[sample_name, "fq1"]
     original_fastq_reverse = samples_df.loc[sample_name, "fq2"]
     if sample_is_single_end(sample_name): # single-end >> empty fq2 field 
-        bash_trimming_cmd = "fastp -q " + TRIMMING_THRESHOLD + " --thread " + THREADS + " -i " + original_fastq_forward + " -o " + TRIMMED_DIR + sample_name + "_trimmed_R1.fq.gz" 
+        bash_trimming_cmd = "fastp -q " + TRIMMING_THRESHOLD + " --thread " + THREADS + " -i " + original_fastq_forward + " -o " + TRIMMED_DIR + sample_name + "_trimmed_R1.fq" 
         subprocess.call(bash_trimming_cmd, shell=True)
     else:
-        bash_trimming_cmd = "fastp -q " + TRIMMING_THRESHOLD + " --thread " + THREADS + " -i " + original_fastq_forward + " -I " + original_fastq_reverse + " -o " + TRIMMED_DIR + sample_name + "_trimmed_R1.fq.gz" + " -O " + TRIMMED_DIR + sample_name + "_trimmed_R2.fq.gz"        
+        bash_trimming_cmd = "fastp -q " + TRIMMING_THRESHOLD + " --thread " + THREADS + " -i " + original_fastq_forward + " -I " + original_fastq_reverse + " -o " + TRIMMED_DIR + sample_name + "_trimmed_R1.fq" + " -O " + TRIMMED_DIR + sample_name + "_trimmed_R2.fq"        
         subprocess.call(bash_trimming_cmd, shell=True)
 
-#########
-## MutMap
-#########
-testfiles = get_trimmed_files_per_sample_type(trimmed_dir=TRIMMED_DIR, sample_type="cultivar")
+    subprocess.call("mv fastp.html " + RESULT_DIR + "fastp/" + sample_name, shell=True)
+    subprocess.call("mv fastp.json " + RESULT_DIR + "fastp/" + sample_name, shell=True)
 
-
-for sample_name in samples:
-    # Get the fastq files of the 'cultivar' (the reference genotype)
-    cultivar_files = get_trimmed_files_per_sample_type(TRIMMED_DIR, sample_type="cultivar")
-    mutant_files = get_trimmed_files_per_sample_type(TRIMMED_DIR, sample_type="bulk")
-    print(cultivar_files)
-    print(mutant_files)
-
-    print("################################")
-    print("MutMap analysis of ", sample_name)
-    print("#################################")
-    """   if sample_is_single_end(sample_name):
-            trimmed_fastq_forward = trimmed_file_dir + sample_name + "_trimmed_R1.fq.gz"
-            bash_cmd = "mutmap -r " + REF_GENOME_FASTA + " -c " + trimmed_fastq_forward """
-
-############
-# Clean up
 #############
+## 02. MutMap
+#############
+
+# Clean any leftover MutMap result directory
+mutmap_dir_cleaning_cmd = "rm -r " + RESULT_DIR + "mutmap/"
+subprocess.call(mutmap_dir_cleaning_cmd, shell=True)
+
+# Sample name of reference sample
+ref_sample_name = samples_df.query("sample_type == 'reference'").index.values[0]
+
+for sample in samples:
+    if sample != ref_sample_name:
+        print("########################################")
+        print("Performing mutmap analysis for:", sample)
+        print("########################################")
+        ref_trimmed_fastq_files = get_trimmed_files_of_reference_sample()
+        mutant_trimmed_fastq_files = get_trimmed_files_of_sample(sample=sample)
+        n_ind = get_number_of_individuals(sample=sample)
+
+        mutmap_cmd = "mutmap --ref " + REF_GENOME_FASTA +  " -c " + ref_trimmed_fastq_files + " -b " + mutant_trimmed_fastq_files + " -n " + str(n_ind) + " -o " + RESULT_DIR + "mutmap/" + " -t " + THREADS + " --mem " + MEM_MUTMAP
+        subprocess.call(mutmap_cmd, shell=True)
+        #subprocess.call("mv " + RESULT_DIR + "mutmap/ " + MUTMAP_DIR + sample) 
+
+
+##########
+# Clean up
+##########
 cleaning_cmd = "rm -r " + WORKING_DIR
 #subprocess.call(cleaning_cmd, shell=True)

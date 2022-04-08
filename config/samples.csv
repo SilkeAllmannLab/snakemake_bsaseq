@@ -1,3 +1,4 @@
-﻿sample,sample_type,fq1,fq2
-cultivar,reference,config/fastq/mutmap_cultivar.1.fastq.gz,config/fastq/mutmap_cultivar.2.fastq.gz
-bulk,mutant,config/fastq/mutmap_bulk.1.fastq.gz,config/fastq/mutmap_bulk.2.fastq.gz
+﻿sample_name,sample_type,n_individuals,fq1,fq2
+D_Oy_0,reference,NA,config/fastq/mutmap_cultivar.1.fastq.gz,config/fastq/mutmap_cultivar.2.fastq.gz
+mutant_01,mutant,50,config/fastq/mutmap_mutant_01_forward.fastq.gz,config/fastq/mutmap_mutant_01_reverse.fastq.gz
+mutant_02,mutant,50,config/fastq/mutmap_mutant_02_forward.fastq.gz,config/fastq/mutmap_mutant_02_reverse.fastq.gz
