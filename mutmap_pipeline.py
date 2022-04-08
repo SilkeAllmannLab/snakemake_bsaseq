@@ -155,10 +155,6 @@ for sample_name in samples:
 ## 02. MutMap
 #############
 
-# Clean any leftover MutMap result directory
-mutmap_dir_cleaning_cmd = "rm -r " + RESULT_DIR + "mutmap/"
-subprocess.call(mutmap_dir_cleaning_cmd, shell=True)
-
 # Sample name of reference sample
 ref_sample_name = samples_df.query("sample_type == 'reference'").index.values[0]
 
@@ -176,8 +172,3 @@ for sample in samples:
         subprocess.call("mv mutmap/" + " " + RESULT_DIR + sample, shell=True) 
 
 
-##########
-# Clean up
-##########
-cleaning_cmd = "rm -r " + WORKING_DIR
-#subprocess.call(cleaning_cmd, shell=True)
