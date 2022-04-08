@@ -173,9 +173,7 @@ for sample in samples:
 
         mutmap_cmd = "mutmap --ref " + REF_GENOME_FASTA +  " -c " + ref_trimmed_fastq_files + " -b " + mutant_trimmed_fastq_files + " -n " + str(n_ind) + " -o " + "mutmap/" + " -t " + THREADS + " --mem " + MEM_MUTMAP
         subprocess.call(mutmap_cmd, shell=True)
-        subprocess.call("mkdir -p " + RESULT_DIR + sample + "mutmap/", shell=True)
         subprocess.call("mv mutmap/" + RESULT_DIR + sample + "mutmap/ ", shell=True) 
-        subprocess.call("rm -r mutmap/") # this removes the temporary mutmap directory (renamed with sample name)
 
 
 ##########
