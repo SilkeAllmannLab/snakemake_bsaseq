@@ -19,7 +19,9 @@ FASTQ_DIR = parameter_values["fastq_dir"]
 TRIMMED_DIR = WORKING_DIR + "trimmed/"
 MUTMAP_DIR = RESULT_DIR + "mutmap/"
 
-# Create directories
+# Clean-up existing directories and create fresh ones
+subprocess.call("rm -r " + RESULT_DIR, shell=True)
+subprocess.call("rm -r " + WORKING_DIR, shell=True)
 os.makedirs(RESULT_DIR, exist_ok=True)
 os.makedirs(WORKING_DIR, exist_ok=True)
 os.makedirs(TRIMMED_DIR, exist_ok=True)
