@@ -146,8 +146,8 @@ for sample_name in samples:
         bash_trimming_cmd = "fastp -q " + TRIMMING_THRESHOLD + " --thread " + THREADS + " -i " + original_fastq_forward + " -I " + original_fastq_reverse + " -o " + TRIMMED_DIR + sample_name + "_trimmed_R1.fq" + " -O " + TRIMMED_DIR + sample_name + "_trimmed_R2.fq"        
         subprocess.call(bash_trimming_cmd, shell=True)
 
-    subprocess.call("mv fastp.html " + RESULT_DIR + "fastp/" + sample_name, shell=True)
-    subprocess.call("mv fastp.json " + RESULT_DIR + "fastp/" + sample_name, shell=True)
+    subprocess.call("mv fastp.html " + RESULT_DIR + "fastp/" + sample_name + ".html", shell=True)
+    subprocess.call("mv fastp.json " + RESULT_DIR + "fastp/" + sample_name + ".json", shell=True)
 
 #############
 ## 02. MutMap
@@ -171,8 +171,8 @@ for sample in samples:
 
         mutmap_cmd = "mutmap --ref " + REF_GENOME_FASTA +  " -c " + ref_trimmed_fastq_files + " -b " + mutant_trimmed_fastq_files + " -n " + str(n_ind) + " -o " + RESULT_DIR + "mutmap/" + " -t " + THREADS + " --mem " + MEM_MUTMAP
         subprocess.call(mutmap_cmd, shell=True)
-        subprocess.call("mkdir -p " + RESULT_DIR + "mutmap/" + sample)
-        subprocess.call("mv " + RESULT_DIR + "mutmap/ " + MUTMAP_DIR + sample) 
+        subprocess.call("mkdir -p " + RESULT_DIR + "mutmap/" + sample, shell=True)
+        subprocess.call("mv " + RESULT_DIR + "mutmap/ " + MUTMAP_DIR + sample, shell=True) 
 
 
 ##########
