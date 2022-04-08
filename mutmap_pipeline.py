@@ -173,7 +173,7 @@ for sample in samples:
 
         mutmap_cmd = "mutmap --ref " + REF_GENOME_FASTA +  " -c " + ref_trimmed_fastq_files + " -b " + mutant_trimmed_fastq_files + " -n " + str(n_ind) + " -o " + "mutmap/" + " -t " + THREADS + " --mem " + MEM_MUTMAP
         subprocess.call(mutmap_cmd, shell=True)
-        subprocess.call("mv mutmap/" + RESULT_DIR + sample, shell=True) 
+        subprocess.call("mv mutmap/" + " " + RESULT_DIR + sample, shell=True) 
 
 
 ##########
