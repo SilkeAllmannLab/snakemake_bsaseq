@@ -195,4 +195,6 @@ for sample in samples:
         print(snpeff_cmd)
         subprocess.call(snpeff_cmd, shell=True)    
 
-
+#################
+# End of pipeline
+#################

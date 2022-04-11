@@ -4,12 +4,9 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - mutmap = 2.3.2
-  - snakemake = 5.20.0
+  - mutmap = 2.3.3
   - fastp = 0.19.5
   - multiqc = 1.11
   - pyyaml = 6.0
   - snpeff = 5.0
-  - parallel-fastq-dump = 0.6.7 
-  - samtools = 1.14
-  - bcftools = 1.14
+  - samtools = 1.15
