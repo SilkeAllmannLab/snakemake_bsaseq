@@ -187,7 +187,7 @@ for sample in samples:
         print("##############################")
         
         # decompress variant file
-        vcf_decompress_cmd = "gzip --keep -d " + RESULT_DIR + sample + "/30_vcf/mutmap.vcf.gz"
+        vcf_decompress_cmd = "gzip -d " + RESULT_DIR + sample + "/30_vcf/mutmap.vcf.gz"
         subprocess.call(vcf_decompress_cmd, shell=True)
 
         snpeff_cmd = "gzip --keep -d -c " + RESULT_DIR + sample + "/30_vcf/mutmap.vcf.gz | snpEff ann " + "-o " + SNPEFF_FORMAT + " -csvStats -onlyProtein -v " + SNPEFF_DB + " " + RESULT_DIR + sample + "/30_vcf/mutmap.vcf > " + RESULT_DIR + sample + "/mutmap_annotated.vcf"   
