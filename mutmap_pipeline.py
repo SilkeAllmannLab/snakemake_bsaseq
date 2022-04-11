@@ -185,8 +185,12 @@ for sample in samples:
         print("##############################")
         print("Annotating SNPs for:", sample)
         print("##############################")
-        snpeff_cmd = "gzip --keep -d -c " + RESULT_DIR + sample + "/30_vcf/mutmap.vcf.gz | snpEff ann " + "-o " + SNPEFF_FORMAT + " -csvStats -onlyProtein -v " + SNPEFF_DB > RESULT_DIR + sample + "/mutmap_annotated.vcf.gz"   
-        print(snpeff_cmd)
+        
+        # decompress variant file
+        vcf_decompress_cmd = "gzip --keep -d " + RESULT_DIR + sample + "/30_vcf/mutmap.vcf.gz"
+        subprocess.call(vcf_decompress_cmd, shell=True)
+
+        snpeff_cmd = "gzip --keep -d -c " + RESULT_DIR + sample + "/30_vcf/mutmap.vcf.gz | snpEff ann " + "-o " + SNPEFF_FORMAT + " -csvStats -onlyProtein -v " + SNPEFF_DB + " " + RESULT_DIR + sample + "/30_vcf/mutmap.vcf > " + RESULT_DIR + sample + "/mutmap_annotated.vcf"   
         subprocess.call(snpeff_cmd, shell=True)    
 
 
