@@ -34,6 +34,10 @@ TRIMMING_THRESHOLD = str(parameter_values["qualified_quality_phred"]) # convert 
 REF_GENOME_FASTA = parameter_values["ref_genome"]
 MEM_MUTMAP = "1G"
 
+# SNPEFF parameters
+SNPEFF_FORMAT = parameter_values["snpeff"]["output_format"]
+SNPEFF_DB = parameter_values["snpeff"]["database"] 
+
 # General parameters
 THREADS = str(parameter_values["threads"])
 
@@ -175,6 +179,19 @@ for sample in samples:
         subprocess.call(mutmap_cmd, shell=True)
         subprocess.call("mv mutmap/" + " " + RESULT_DIR + sample, shell=True) 
 
+
+############
+# 03. snpEff
+############
+
+for sample in samples:
+    if sample != ref_sample_name:
+        print("########################################")
+        print("Annotating SNPs for:", sample)
+        print("########################################")
+        snpeff_cmd = "snpEff ann " + "-o " + SNPEFF_FORMAT + " -csvStats -onlyProtein -v " + SNPEFF_DB + " " + RESULT_DIR + sample + "/30_vcf/mutmap.vcf.gz " + " > " + RESULT_DIR + sample + "/mutmap_annotated.vcf.gz"   
+        print(snpeff_cmd)
+        subprocess.call(snpeff_cmd, shell=True)    
 
 ##########
 # Clean up
