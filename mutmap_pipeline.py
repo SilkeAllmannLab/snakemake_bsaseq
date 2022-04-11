@@ -191,7 +191,7 @@ for sample in samples:
         subprocess.call(vcf_decompress_cmd, shell=True)
 
         # Annotate SNPs using snpEff
-        snpeff_cmd = "snpEff ann " + "-o " + SNPEFF_FORMAT + " -csvStats -onlyProtein -v " + SNPEFF_DB + " " + RESULT_DIR + sample + "/30_vcf/mutmap.vcf > " + RESULT_DIR + sample + "/mutmap_annotated.vcf"   
+        snpeff_cmd = "snpEff -v " + "-o " + SNPEFF_FORMAT + " -csvStats " + SNPEFF_DB + " " + RESULT_DIR + sample + "/30_vcf/mutmap.vcf > " + RESULT_DIR + sample + "/mutmap_annotated.vcf"   
         subprocess.call(snpeff_cmd, shell=True)    
 
 
