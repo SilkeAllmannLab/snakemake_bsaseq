@@ -182,10 +182,11 @@ for sample in samples:
 
 for sample in samples:
     if sample != ref_sample_name:
-        print("########################################")
+        print("##############################")
         print("Annotating SNPs for:", sample)
-        print("########################################")
-        snpeff_cmd = "gzip -d " + RESULT_DIR + sample + "/30_vcf/mutmap.vcf.gz | snpEff ann " + "-o " + SNPEFF_FORMAT + " -csvStats -onlyProtein -v " + SNPEFF_DB > RESULT_DIR + sample + "/mutmap_annotated.vcf.gz"   
+        print("##############################")
+        snpeff_cmd = "gzip --keep -d -c " + RESULT_DIR + sample + "/30_vcf/mutmap.vcf.gz | snpEff ann " + "-o " + SNPEFF_FORMAT + " -csvStats -onlyProtein -v " + SNPEFF_DB > RESULT_DIR + sample + "/mutmap_annotated.vcf.gz"   
+        print(snpeff_cmd)
         subprocess.call(snpeff_cmd, shell=True)    
 
 
