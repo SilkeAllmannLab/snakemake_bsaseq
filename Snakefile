@@ -26,13 +26,9 @@ if os.path.isdir(WORKING_DIR + "mutmap"):
 # Samples and conditions
 ########################
 
-# read the tabulated separated table containing the sample, condition and fastq file information∂DE
-units = pd.read_table(config["units"], dtype=str).set_index(["sample"], drop=False)
-
 # create lists containing the sample names and conditions
-SAMPLES = units.index.get_level_values('sample').unique().tolist()
-samples = pd.read_csv(config["units"], dtype=str,index_col=0,sep="\t")
-samplefile = config["units"]
+samples = pd.read_csv(config["samples"], dtype=str, index_col=0, sep=",")
+SAMPLES = samples.index.values.tolist()
 
 
 ###########################
@@ -162,7 +158,7 @@ rule multiqc:
 
 rule mutmap:
     input:
-        ref_fasta = config["refs"]["genome"],
+        ref_fasta = config["ref_genome"],
         forward_trimmed_files = expand(WORKING_DIR + "trimmed/{sample}_R1_trimmed.fq.gz", sample = SAMPLES),
         reverse_trimmed_files = expand(WORKING_DIR + "trimmed/{sample}_R2_trimmed.fq.gz", sample = SAMPLES)
     output:
