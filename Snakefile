@@ -12,10 +12,16 @@ import os
 ###############
 # Configuration
 ###############
+
 configfile: "config/config.yaml" # where to find parameters
+
+# Directories
 WORKING_DIR = config["working_dir"]
 RESULT_DIR = config["result_dir"]
+TRIMMED_DIR = WORKING_DIR + "trimmed/"
 
+# MutMap parameters
+REF_GENOME = config["ref_genome"]
 
 # Clean potential left-over mutmap folders
 if os.path.isdir(WORKING_DIR + "mutmap"):
@@ -29,7 +35,7 @@ if os.path.isdir(WORKING_DIR + "mutmap"):
 # create lists containing the sample names and conditions
 samples = pd.read_csv(config["samples"], dtype=str, index_col=0, sep=",")
 SAMPLES = samples.index.values.tolist()
-
+print(SAMPLES)
 
 ###########################
 # Input functions for rules
@@ -37,10 +43,11 @@ SAMPLES = samples.index.values.tolist()
 
 def sample_is_single_end(sample):
     """This function detect missing value in the column 2 of the units.tsv"""
-    if "fq2" not in samples.columns:
-        return True
+    if "fq2" in samples.columns:
+        return False
     else:
-        return pd.isnull(samples.loc[(sample), "fq2"])
+        return False
+        #return pd.isnull(samples.loc[(sample), "fq2"])
 
 def get_fastq(wildcards):
     """This function checks if the sample has paired end or single end reads and returns 1 or 2 names of the fastq files"""
@@ -62,36 +69,60 @@ def get_trim_names(wildcards):
         inFile = samples.loc[(wildcards.sample), ["fq1", "fq2"]].dropna()
         return "--in1 " + inFile[0] + " --in2 " + inFile[1] + " --out1 " + WORKING_DIR + "trimmed/" + wildcards.sample + "_R1_trimmed.fq.gz --out2 "  + WORKING_DIR + "trimmed/" + wildcards.sample + "_R2_trimmed.fq.gz"
 
-def get_trimmed_files_per_sample_type(trimmed_dir = WORKING_DIR + "trimmed", sample_type = "cultivar"):
+def get_trimmed_files_of_sample(wildcards):
     """
     This function:
-      1. Collects the files names of the trimmed files inside the trimmed directory
-      2. Filter to keep only the "cultivar" or "bulk" trimmed files.
-      3. Returns a list with one or two elements. 
+      1. Re-creates the files names of the trimmed files for a given mutant file 
+      2. Returns a list with one or two elements. 
+
+    Parameters
+    ---------
+    sample: str
+      name of the sample as given in the sample_name column of the 'samples.csv' file
+
+    Returns
+    -------
+    A string of the path to trimmed file(s) names with a comma ',' as separator for the files (input for MutMap)
     """
-    if os.path.isdir(trimmed_dir):
-        pass
+    if sample_is_single_end(wildcards):
+        trimmed_files = ",".join(TRIMMED_DIR + wildcards.sample + "_trimmed_R1.fq")
     else:
-        print("Directory with trimmed file does not exist")
+        trimmed_files = ",".join([TRIMMED_DIR + wildcards.sample + "_trimmed_R1.fq", TRIMMED_DIR + wildcards.sample + "_trimmed_R2.fq"]) 
+    return trimmed_files
 
-    trimmed_files = os.listdir(trimmed_dir) # collects all trimmed files
-    trimmed_files.sort()                    # to have R1 before R2
+def get_trimmed_files_of_reference_sample():
+    """
+    This function re-creates the path to the trimmed files of the reference sample.
+ 
+    Returns
+    -------
+    A string with the ',' and the reference trimmed file path (input for MutMap)
+    """
+    # Verify that 'reference' is in the 'sample_type' column of the Pandas samples_df
+    sample_types = samples.sample_type.unique()
+    #if "reference" not in sample_types:
+    #    raise ValueError("sample type should be either equal to 'reference' or 'mutant'")
+    
+    # Get the sample name corresponding to the reference sample
+    ref_sample_name = samples.query("sample_type == 'reference'").index.values[0]
 
-    cultivar_files = [trimmed_dir + f for f in trimmed_files if sample_type in f]
-    bulk_files = [trimmed_dir + f for f in trimmed_files if sample_type in f]
-    if sample_type == "cultivar":
-        return ",".join(cultivar_files) # fastq of cultivar. If you specify fastq, please separate pairs by comma, e.g. -b fastq1,fastq2.
-    elif sample_type == "bulk":
-        return ",".join(bulk_files)     # fastq of mutant bulk. If you specify fastq, please separate pairs by comma, e.g. -b fastq1,fastq2.
+    # Re-create the path of the trimmed file
+    if sample_is_single_end(ref_sample_name):
+        trimmed_files = ",".join(TRIMMED_DIR + ref_sample_name + "_trimmed_R1.fq")
     else:
-        "Please check that sample_type == 'cultivar' or sample_type == 'bulk'"
+        trimmed_files = ",".join([TRIMMED_DIR + ref_sample_name + "_trimmed_R1.fq", TRIMMED_DIR + ref_sample_name + "_trimmed_R2.fq"]) 
+    
+    return trimmed_files
+
+
 
 #################
 # Desired outputs
 #################
 MULTIQC = RESULT_DIR + "multiqc_report.html"
-MUTMAP_VCF = RESULT_DIR + "mutmap/30_vcf/mutmap.vcf.gz"
-MUTMAP_ANNOTATED_VCF = RESULT_DIR + "snpeff/mutmap_annotated.vcf.gz"
+MUTMAP_VCF = expand(RESULT_DIR + "{sample}/mutmap/30_vcf/mutmap.vcf.gz", sample=SAMPLES)
+MUTMAP_ANNOTATED_VCF = expand(RESULT_DIR + "{sample}/snpeff/mutmap_annotated.vcf.gz", sample=SAMPLES)
+
 
 rule all:
     input:
@@ -158,26 +189,28 @@ rule multiqc:
 
 rule mutmap:
     input:
-        ref_fasta = config["ref_genome"],
-        forward_trimmed_files = expand(WORKING_DIR + "trimmed/{sample}_R1_trimmed.fq.gz", sample = SAMPLES),
-        reverse_trimmed_files = expand(WORKING_DIR + "trimmed/{sample}_R2_trimmed.fq.gz", sample = SAMPLES)
+        ref_fasta = REF_GENOME,
+        #mutant_trimmed = get_trimmed_files_of_sample
+        #forward_trimmed_files = expand(WORKING_DIR + "trimmed/{sample}_R1_trimmed.fq.gz", sample = SAMPLES),
+        #reverse_trimmed_files = expand(WORKING_DIR + "trimmed/{sample}_R2_trimmed.fq.gz", sample = SAMPLES)
     output:
-        RESULT_DIR + "mutmap/30_vcf/mutmap.vcf.gz"
+        RESULT_DIR + "{sample}/mutmap/30_vcf/mutmap.vcf.gz"
     message:
         "Running MutMap"
     params:
-        cultivar_files        = get_trimmed_files_per_sample_type(trimmed_dir = WORKING_DIR + "trimmed/", sample_type = "cultivar"),
-        bulk_files            = get_trimmed_files_per_sample_type(trimmed_dir = WORKING_DIR + "trimmed/", sample_type = "bulk"),
+        cultivar_files        = get_trimmed_files_of_reference_sample(),
+        mutant_trimmed = get_trimmed_files_of_sample,
+        #bulk_files            = get_trimmed_files_of_sample,
         window_size           = config["mutmap"]["window_size"],
         step_size             = config["mutmap"]["step_size"],
         n_individuals         = config["mutmap"]["n_ind"],
         outdir_mutmap         = "mutmap/",   # only temporary for mutmap
-        outdir_final          = RESULT_DIR + "mutmap/"
+        outdir_final          = RESULT_DIR + "{sample}/mutmap/"
     threads: 10
     shell:
         "mutmap --ref {input.ref_fasta} "
         "--cultivar {params.cultivar_files} "
-        "--bulk {params.bulk_files} "          
+        "--bulk {params.mutant_trimmed} "          
         "--threads {threads}  "
         "--window {params.window_size} "
         "--N-bulk {params.n_individuals} "
@@ -191,10 +224,11 @@ rule mutmap:
 
 rule snpeff:
     input:
-        RESULT_DIR + "mutmap/30_vcf/mutmap.vcf.gz"
+        RESULT_DIR + "{sample}/mutmap/30_vcf/mutmap.vcf.gz"
+        #RESULT_DIR + "mutmap/30_vcf/mutmap.vcf.gz"
     output:
-        csv = RESULT_DIR + "snpeff/stats.csv",
-        ann = RESULT_DIR + "snpeff/mutmap_annotated.vcf.gz"
+        csv = RESULT_DIR + "{sample}/snpeff/stats.csv",
+        ann = RESULT_DIR + "{sample}/snpeff/mutmap_annotated.vcf.gz"
     message:
         "Annotating SNPs with snpEff"
     params:

@@ -17,7 +17,8 @@ threads: 5
 # fastp: read quality trimming
 #############################
 
-qualified_quality_phred: 30 # Phred+33 score (> 15 for Proton Ion, > 30 or more for Illumina) 
+fastp:
+  qualified_quality_phred: 30 # Phred+33 score (> 15 for Proton Ion, > 30 or more for Illumina) 
 
 
 ########
