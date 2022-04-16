@@ -10,6 +10,5 @@ dependencies:
   - multiqc = 1.11
   - pyyaml = 6.0
   - snpeff = 5.0
-  - parallel-fastq-dump = 0.6.7 
-  - samtools = 1.14
-  - bcftools = 1.14
+  - samtools = 1.15.1
+  - bwa = 0.7.15

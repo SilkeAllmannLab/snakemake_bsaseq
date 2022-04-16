@@ -6,8 +6,10 @@
 ###########
 # Libraries
 ###########
+from random import sample
 import pandas as pd
 import os
+from subprocess import check_output
 
 ###############
 # Configuration
@@ -35,7 +37,6 @@ if os.path.isdir(WORKING_DIR + "mutmap"):
 # create lists containing the sample names and conditions
 samples = pd.read_csv(config["samples"], dtype=str, index_col=0, sep=",")
 SAMPLES = samples.index.values.tolist()
-print(SAMPLES)
 
 ###########################
 # Input functions for rules
@@ -120,6 +121,7 @@ def get_trimmed_files_of_reference_sample():
 # Desired outputs
 #################
 MULTIQC = RESULT_DIR + "multiqc_report.html"
+BAMS = expand(WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam", sample=SAMPLES)
 MUTMAP_VCF = expand(RESULT_DIR + "{sample}/mutmap/30_vcf/mutmap.vcf.gz", sample=SAMPLES)
 MUTMAP_ANNOTATED_VCF = expand(RESULT_DIR + "{sample}/snpeff/mutmap_annotated.vcf.gz", sample=SAMPLES)
 
@@ -127,14 +129,15 @@ MUTMAP_ANNOTATED_VCF = expand(RESULT_DIR + "{sample}/snpeff/mutmap_annotated.vcf
 rule all:
     input:
         MULTIQC,
-        MUTMAP_VCF,
-        MUTMAP_ANNOTATED_VCF
+        BAMS
+#        MUTMAP_VCF,
+#        MUTMAP_ANNOTATED_VCF
     message:
         "BSA-seq pipeline run complete!"
     shell:
         "cp config/config.yaml {RESULT_DIR};"
-        "cp config/samples.tsv {RESULT_DIR};"
-        "rm -r {WORKING_DIR}"
+        "cp config/samples.csv {RESULT_DIR};"
+        #"rm -r {WORKING_DIR}"
 
 #######
 # Rules
@@ -182,6 +185,118 @@ rule multiqc:
         "multiqc --force "
         "--outdir {params.outdir} "
         "{params.fastp_directory} "
+
+
+###########
+# Alignment
+###########
+
+rule bwa_index:
+    input:
+        genome = REF_GENOME
+    output:
+        WORKING_DIR + "index/genome.amb",
+        WORKING_DIR + "index/genome.ann",
+        WORKING_DIR + "index/genome.pac",
+        WORKING_DIR + "index/genome.sa",
+        WORKING_DIR + "index/genome.bwt" 
+    message:
+        "building BWA index for the genomic reference"
+    params:
+        db_prefix = WORKING_DIR + "index/genome"
+    shell:
+        "bwa index -p {params.db_prefix} {input}"
+
+rule uncompress:
+    input:
+        forward_fastq = WORKING_DIR + "trimmed/" + "{sample}_R1_trimmed.fq.gz",
+        reverse_fastq = WORKING_DIR + "trimmed/" + "{sample}_R2_trimmed.fq.gz"
+    output:
+        forward_fastq = WORKING_DIR + "trimmed/{sample}_forward.fastq",
+        reverse_fastq = WORKING_DIR + "trimmed/{sample}_reverse.fastq"
+    message:
+        "uncompressing {wildcards.sample} reads"
+    run:
+        if sample_is_single_end("{wildcards.sample}"):
+            shell("gzip -cd {input.forward_fastq} > {output.forward_fastq};touch {output.reverse_fastq}")
+        else:
+            shell("gzip -cd {input.forward_fastq} > {output.forward_fastq}")
+            shell("gzip -cd {input.reverse_fastq} > {output.reverse_fastq}")
+
+
+rule bwa_align:
+    input:
+        index = [WORKING_DIR + "index/genome." + ext for ext in ["amb","ann","pac","sa","bwt"]],
+        forward_fastq = WORKING_DIR + "trimmed/{sample}_forward.fastq",
+        reverse_fastq = WORKING_DIR + "trimmed/{sample}_reverse.fastq"
+    output:
+        temp(WORKING_DIR + "mapped/{sample}.bam")
+    message:
+        "mapping {wildcards.sample} reads to genomic reference"
+    params:
+        db_prefix = WORKING_DIR + "index/genome"
+    threads: 5
+    run:
+        # Building the read group id (sequencer_id + flowcell_name + lane_number + barcode)
+        SEQUENCER_ID=check_output("head -n 1 " + input.forward_fastq + " |cut -d: -f1",shell=True).decode().strip()
+        FLOWCELL_NAME=check_output("head -n 1 " + input.forward_fastq + " |cut -d: -f3",shell=True).decode().strip()
+        FLOWCELL_LANE=check_output("head -n 1 " + input.forward_fastq + " |cut -d: -f4",shell=True).decode().strip()
+        BARCODE=check_output("head -n 1 " + input.forward_fastq + " |cut -d' ' -f2 |cut -d: -f4",shell=True).decode().strip()
+        # Feeding the READ_GROUP_ID to bwa
+        READ_GROUP = SEQUENCER_ID + "." + FLOWCELL_NAME + "." + FLOWCELL_LANE + "." + BARCODE
+        # If sample is single end, feeding only one fastq file (other outputs an empty BAM file)
+        if sample_is_single_end(wildcards.sample):
+            shell("bwa mem -v 1 -t {threads} -R '@RG\\tID:{READ_GROUP}\\tPL:ILLUMINA\\tLB:{wildcards.sample}\\tSM:{wildcards.sample}' {params.db_prefix} {input.forward_fastq} >{output}")
+        else:
+            shell("bwa mem -v 1 -t {threads} -R '@RG\\tID:{READ_GROUP}\\tPL:ILLUMINA\\tLB:{wildcards.sample}\\tSM:{wildcards.sample}' {params.db_prefix} {input.forward_fastq} {input.reverse_fastq} >{output}")
+
+###############################################
+# Post-alignment steps prior to variant calling
+###############################################
+
+rule samtools_sort_by_qname:
+    input:
+        WORKING_DIR + "mapped/{sample}.bam"
+    output:
+        temp(WORKING_DIR + "mapped/{sample}.qname_sorted.bam")
+    message:
+         "sorting {wildcards.sample} bam file by read name (QNAME field)"
+    threads: 4
+    shell:
+        "samtools sort -n -@ {threads} {input} > {output}"
+
+rule samtools_fixmate:
+    input:
+        WORKING_DIR + "mapped/{sample}.qname_sorted.bam"
+    output:
+        temp(WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.bam")
+    message:
+        "Fixing mate in {wildcards.sample} sorted bam file"
+    threads: 4
+    shell:
+        "samtools fixmate -m -@ {threads} {input} {output}"
+
+rule samtools_sort_by_coordinates:
+    input:
+        temp(WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.bam")
+    output:
+        temp(WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.bam")
+    message:
+        "sorting {wildcards.sample} bam file by coordinate"
+    threads: 4
+    shell:
+        "samtools sort -@ {threads} {input} > {output}"
+
+rule mark_duplicate:
+    input:
+        temp(WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.bam")
+    output:
+        WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam"
+    message:
+        "marking duplicates in {wildcards.sample} bam file"
+    threads: 4
+    shell:
+        "samtools markdup -@ {threads} {input} {output}"
 
 ########
 # MutMap
