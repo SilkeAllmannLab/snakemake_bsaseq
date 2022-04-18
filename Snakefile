@@ -14,7 +14,7 @@ from subprocess import check_output
 # Configuration
 ###############
 
-configfile: "config/config.yaml" # where to find parameters
+configfile: 'config/config.yaml' # where to find parameters
 
 # Directories
 WORKING_DIR = config["working_dir"]
@@ -120,15 +120,17 @@ def get_trimmed_files_of_reference_sample():
 # Desired outputs
 #################
 MULTIQC = RESULT_DIR + "multiqc_report.html"
-BAMS = expand(WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam", sample=SAMPLES)
+#BAMS = expand(WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam", sample=SAMPLES)
 MUTMAP_VCF = expand(RESULT_DIR + "{sample}/mutmap/30_vcf/mutmap.vcf.gz", sample=SAMPLES)
 MUTMAP_ANNOTATED_VCF = expand(RESULT_DIR + "{sample}/snpeff/mutmap_annotated.vcf.gz", sample=SAMPLES)
 
+VCF = expand(RESULT_DIR + "vcf/{sample}.vcf.gz", sample=SAMPLES)
 
 rule all:
     input:
         MULTIQC,
-        BAMS
+        #BAMS, 
+        VCF
 #        MUTMAP_VCF,
 #        MUTMAP_ANNOTATED_VCF
     message:
@@ -296,6 +298,40 @@ rule mark_duplicate:
     threads: 4
     shell:
         "samtools markdup -@ {threads} {input} {output}"
+
+
+##############
+# Variant call
+##############
+
+rule call_variants:
+    input:
+        bam = WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.bam"
+    output:
+        vcf = RESULT_DIR + "vcf/{sample}.vcf.gz"
+    message:
+        "Call variants for {wildcards.sample}"
+    threads: 5
+    params:
+        mapping_quality = config["mutmap"]["min_mq"],
+        minimum_base_quality = config["mutmap"]["min_bq"],
+        adjust_mapping_quality = config["mutmap"]["adjust_mq"],
+        ref_genome = REF_GENOME
+    shell:
+        "bcftools mpileup "
+        "--annotate AD,ADF,ADR "                       # allelic depth, allelic depth forward strand, allelic depth reverse strand
+        "--no-BAQ "                                    # Disable probabilistic realignment for the computation of base alignment quality (BAQ). 
+        "--min-MQ {params.mapping_quality} "           # Minimum mapping quality for an alignment to be used [0]
+        "--min-BQ {params.minimum_base_quality} "      # Minimum base quality for a base to be considered [13]
+        "--adjust-MQ {params.adjust_mapping_quality} " # "adjust-MQ" in mpileup.
+        "--output-type u "                             # uncompressed output
+        "--fasta-ref {params.ref_genome} "
+        "{input.bam} | "
+        "bcftools call -vm -f GQ,GP -O u | "
+        "bcftools filter -O z -o {output.vcf}"
+
+
+    
 
 ########
 # MutMap

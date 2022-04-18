@@ -4,6 +4,7 @@ channels:
   - bioconda
   - defaults
 dependencies:
+  - snakemake = 5.20.0
   - mutmap = 2.3.3
   - fastp = 0.19.5
   - multiqc = 1.11
