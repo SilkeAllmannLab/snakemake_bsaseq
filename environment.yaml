@@ -9,5 +9,6 @@ dependencies:
   - multiqc = 1.11
   - pyyaml = 6.0
   - snpeff = 5.0
-  - samtools = 1.15.1
+  - samtools = 1.15
   - bwa = 0.7.15
+  - bcftools = 1.15
