@@ -278,7 +278,7 @@ rule samtools_fixmate:
 
 rule samtools_sort_by_coordinates:
     input:
-        temp(WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.bam")
+        WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.bam"
     output:
         temp(WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.bam")
     message:
@@ -289,7 +289,7 @@ rule samtools_sort_by_coordinates:
 
 rule mark_duplicate:
     input:
-        temp(WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.bam")
+        WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.bam"
     output:
         WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam"
     message:
