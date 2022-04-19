@@ -64,9 +64,10 @@ The reference assembly used is [Sorghum_bicolor_NCBIv3](https://www.ncbi.nlm.nih
 ## 2.3 Change default parameters if needed
 
 1. The pipeline parameters are visible in `config/config.yaml` and can be edited before the run is executed.   
-2. Change the file path to your fastq files for the bulk mutant in `config/samples.tsv`.  
+2. Change the file path to your fastq files for the bulk mutant in `config/samples.csv`.  
 
-:warning: In the `samples.tsv` file, samples have to be named `cultivar` and `bulk` for the pipeline to function. 
+:warning: In the `samples.csv` file, columns have to be named `sample_name`, `sample_type` , `n_individuals`, `fq1`,`fq2`. 
+The `sample_type` has to contain either `reference` or `mutant` and nothing else. 
 
 ## 2.4 Run the pipeline 
 

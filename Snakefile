@@ -24,11 +24,6 @@ TRIMMED_DIR = WORKING_DIR + "trimmed/"
 # MutMap parameters
 REF_GENOME = config["ref_genome"]
 
-# Clean potential left-over mutmap folders
-if os.path.isdir(WORKING_DIR + "mutmap"):
-    os.rmdir(WORKING_DIR + "mutmap")
-
-
 ########################
 # Samples and conditions
 ########################
@@ -36,6 +31,8 @@ if os.path.isdir(WORKING_DIR + "mutmap"):
 # create lists containing the sample names and conditions
 samples = pd.read_csv(config["samples"], dtype=str, index_col=0, sep=",")
 SAMPLES = samples.index.values.tolist()
+REF_SAMPLE_NAME = samples.query("sample_type == 'reference'").index.values.tolist()
+MUTANTS = [s for s in SAMPLES if s not in REF_SAMPLE_NAME]
 
 ###########################
 # Input functions for rules
@@ -111,10 +108,40 @@ def get_trimmed_files_of_reference_sample():
         trimmed_files = ",".join(TRIMMED_DIR + ref_sample_name + "_trimmed_R1.fq")
     else:
         trimmed_files = ",".join([TRIMMED_DIR + ref_sample_name + "_trimmed_R1.fq", TRIMMED_DIR + ref_sample_name + "_trimmed_R2.fq"]) 
-    
     return trimmed_files
 
+def get_variant_file_of_reference_sample():
+    """
+    This function re-creates the path to the VCF file of the reference sample.
+ 
+    Returns
+    -------
+    A string with the path to the reference VCF file 
+    """
+    # Verify that 'reference' is in the 'sample_type' column of the Pandas samples_df
+    sample_types = samples.sample_type.unique()
+    #if "reference" not in sample_types:
+    #    raise ValueError("sample type should be either equal to 'reference' or 'mutant'")
+    
+    # Get the sample name corresponding to the reference sample
+    ref_sample_name = samples.query("sample_type == 'reference'").index.values[0]
 
+    # Re-create the path of the VCF file
+    vcf_file = WORKING_DIR + "vcf/" + ref_sample_name + ".vcf.gz"
+    return vcf_file
+
+def get_number_of_individuals_of_sample(wildcards):
+    """
+    This function get the number of individuals for a given sample.
+ 
+    Returns
+    -------
+    A string with the number (integer) of individuals per sample 
+    """
+    samples_filtered = samples.filter(items = [wildcards], axis=0)
+    print(samples_filtered)
+    nb_of_individuals = samples_filtered.n_individuals
+    return int(nb_of_individuals) # conversion to integer for compatibility with MutMap
 
 #################
 # Desired outputs
@@ -124,13 +151,14 @@ MULTIQC = RESULT_DIR + "multiqc_report.html"
 MUTMAP_VCF = expand(RESULT_DIR + "{sample}/mutmap/30_vcf/mutmap.vcf.gz", sample=SAMPLES)
 MUTMAP_ANNOTATED_VCF = expand(RESULT_DIR + "{sample}/snpeff/mutmap_annotated.vcf.gz", sample=SAMPLES)
 
-VCF = expand(RESULT_DIR + "vcf/{sample}.vcf.gz", sample=SAMPLES)
+VCF = expand(RESULT_DIR + "merged_vcf/{sample}.merged_with_reference.vcf", sample=SAMPLES)
+MUTPLOTS = expand(RESULT_DIR + "mutplot/{mutant}/mutmap_plot.png", mutant=MUTANTS)
 
 rule all:
     input:
         MULTIQC,
-        #BAMS, 
-        VCF
+        VCF,
+        MUTPLOTS
 #        MUTMAP_VCF,
 #        MUTMAP_ANNOTATED_VCF
     message:
@@ -308,7 +336,7 @@ rule call_variants:
     input:
         bam = WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.bam"
     output:
-        vcf = RESULT_DIR + "vcf/{sample}.vcf.gz"
+        vcf = WORKING_DIR + "vcf/{sample}.vcf.gz"
     message:
         "Call variants for {wildcards.sample}"
     threads: 5
@@ -330,43 +358,58 @@ rule call_variants:
         "bcftools call -vm -f GQ,GP -O u | "
         "bcftools filter -O z -o {output.vcf}"
 
+rule index_variant_files:
+    input:
+        vcf = WORKING_DIR + "vcf/{sample}.vcf.gz"
+    output:
+        index = WORKING_DIR + "vcf/{sample}.vcf.gz.csi"
+    message:
+        "Indexing {wildcards.sample} VCF file"
+    shell:
+        "bcftools index {input.vcf}"
 
+
+rule add_reference_to_variant_file_for_mutplot:
+    input:
+        vcf = WORKING_DIR + "vcf/{sample}.vcf.gz",
+        index = WORKING_DIR + "vcf/{sample}.vcf.gz.csi"
+    output:
+        vcf_merged = RESULT_DIR + "merged_vcf/{sample}.merged_with_reference.vcf"
+    message:
+        "Adding reference SNPs to {wildcards.sample} vcf file"
+    params:
+        reference_vcf = get_variant_file_of_reference_sample()
+    shell:
+        "bcftools merge "
+        "--force-samples "          # for the reference sample that will be duplicated
+        "--output-type v "          # uncompressed vcf
+        "{params.reference_vcf} "   # name of the reference sample
+        "{input.vcf} > {output.vcf_merged}"
     
-
 ########
 # MutMap
 ########
 
-rule mutmap:
+rule mutplot:
     input:
         ref_fasta = REF_GENOME,
-        #mutant_trimmed = get_trimmed_files_of_sample
-        #forward_trimmed_files = expand(WORKING_DIR + "trimmed/{sample}_R1_trimmed.fq.gz", sample = SAMPLES),
-        #reverse_trimmed_files = expand(WORKING_DIR + "trimmed/{sample}_R2_trimmed.fq.gz", sample = SAMPLES)
+        vcf = RESULT_DIR + "merged_vcf/{mutant}.merged_with_reference.vcf"
     output:
-        RESULT_DIR + "{sample}/mutmap/30_vcf/mutmap.vcf.gz"
+        mutplot = RESULT_DIR + "mutplot/{mutant}/mutmap_plot.png"
     message:
-        "Running MutMap"
+        "Running mutplot on {wildcards.mutant}"
     params:
-        cultivar_files        = get_trimmed_files_of_reference_sample(),
-        mutant_trimmed = get_trimmed_files_of_sample,
-        #bulk_files            = get_trimmed_files_of_sample,
         window_size           = config["mutmap"]["window_size"],
         step_size             = config["mutmap"]["step_size"],
-        n_individuals         = config["mutmap"]["n_ind"],
-        outdir_mutmap         = "mutmap/",   # only temporary for mutmap
-        outdir_final          = RESULT_DIR + "{sample}/mutmap/"
+        n_individuals         = lambda wildcards: int(samples.filter(items = [wildcards.mutant], axis=0).iloc[0]["n_individuals"]),
+        outdir_mutmap         = RESULT_DIR + "mutplot/{mutant}/"  
     threads: 10
     shell:
-        "mutmap --ref {input.ref_fasta} "
-        "--cultivar {params.cultivar_files} "
-        "--bulk {params.mutant_trimmed} "          
-        "--threads {threads}  "
+        "mutplot "
+        "--vcf {input.vcf} "
         "--window {params.window_size} "
         "--N-bulk {params.n_individuals} "
-        "--out {params.outdir_mutmap};"
-        "cp -r {params.outdir_mutmap} {params.outdir_final}"
-
+        "--out {params.outdir_mutmap}"
 
 ########
 # snpEff
@@ -391,6 +434,18 @@ rule snpeff:
         "-stats {output.csv} "
         "{params.snpeff_db} "
         "{input} > {output.ann}"
+
+
+###########
+# QTLseqR
+###########
+# picard CreateSequenceDictionary -R config/refs/mutmap_ref.fasta -O config/refs/mutmap_ref.dict
+# samtools faidx config/refs/mutmap_ref.fasta
+
+#gatk3 -T VariantsToTable -V results/merged_vcf/mutant_01.merged_with_reference.vcf 
+# -F CHROM -F POS -F REF -F ALT -GF AD -GF DP -GF GQ -GF PL -R 
+# config/refs/mutmap_ref.fasta -o results/mutant_01.table
+
 
 ############################
 # Plots of mapping statistics
