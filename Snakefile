@@ -31,6 +31,8 @@ REF_GENOME = config["ref_genome"]
 # create lists containing the sample names and conditions
 samples = pd.read_csv(config["samples"], dtype=str, index_col=0, sep=",")
 SAMPLES = samples.index.values.tolist()
+
+# List with only mutants
 REF_SAMPLE_NAME = samples.query("sample_type == 'reference'").index.values.tolist()
 MUTANTS = [s for s in SAMPLES if s not in REF_SAMPLE_NAME]
 
@@ -39,7 +41,7 @@ MUTANTS = [s for s in SAMPLES if s not in REF_SAMPLE_NAME]
 ###########################
 
 def sample_is_single_end(sample):
-    """This function detect missing value in the column 2 of the units.tsv"""
+    "This function detect missing value in the column 2 of the units.tsv"
     if "fq2" in samples.columns:
         return False
     else:
@@ -66,58 +68,14 @@ def get_trim_names(wildcards):
         inFile = samples.loc[(wildcards.sample), ["fq1", "fq2"]].dropna()
         return "--in1 " + inFile[0] + " --in2 " + inFile[1] + " --out1 " + WORKING_DIR + "trimmed/" + wildcards.sample + "_R1_trimmed.fq.gz --out2 "  + WORKING_DIR + "trimmed/" + wildcards.sample + "_R2_trimmed.fq.gz"
 
-def get_trimmed_files_of_sample(wildcards):
-    """
-    This function:
-      1. Re-creates the files names of the trimmed files for a given mutant file 
-      2. Returns a list with one or two elements. 
-
-    Parameters
-    ---------
-    sample: str
-      name of the sample as given in the sample_name column of the 'samples.csv' file
-
-    Returns
-    -------
-    A string of the path to trimmed file(s) names with a comma ',' as separator for the files (input for MutMap)
-    """
-    if sample_is_single_end(wildcards):
-        trimmed_files = ",".join(TRIMMED_DIR + wildcards.sample + "_trimmed_R1.fq")
-    else:
-        trimmed_files = ",".join([TRIMMED_DIR + wildcards.sample + "_trimmed_R1.fq", TRIMMED_DIR + wildcards.sample + "_trimmed_R2.fq"]) 
-    return trimmed_files
-
-def get_trimmed_files_of_reference_sample():
-    """
-    This function re-creates the path to the trimmed files of the reference sample.
- 
-    Returns
-    -------
-    A string with the ',' and the reference trimmed file path (input for MutMap)
-    """
-    # Verify that 'reference' is in the 'sample_type' column of the Pandas samples_df
-    sample_types = samples.sample_type.unique()
-    #if "reference" not in sample_types:
-    #    raise ValueError("sample type should be either equal to 'reference' or 'mutant'")
-    
-    # Get the sample name corresponding to the reference sample
-    ref_sample_name = samples.query("sample_type == 'reference'").index.values[0]
-
-    # Re-create the path of the trimmed file
-    if sample_is_single_end(ref_sample_name):
-        trimmed_files = ",".join(TRIMMED_DIR + ref_sample_name + "_trimmed_R1.fq")
-    else:
-        trimmed_files = ",".join([TRIMMED_DIR + ref_sample_name + "_trimmed_R1.fq", TRIMMED_DIR + ref_sample_name + "_trimmed_R2.fq"]) 
-    return trimmed_files
-
 def get_variant_file_of_reference_sample():
-    """
+    '''
     This function re-creates the path to the VCF file of the reference sample.
  
     Returns
     -------
     A string with the path to the reference VCF file 
-    """
+    '''
     # Verify that 'reference' is in the 'sample_type' column of the Pandas samples_df
     sample_types = samples.sample_type.unique()
     #if "reference" not in sample_types:
@@ -129,36 +87,32 @@ def get_variant_file_of_reference_sample():
     # Re-create the path of the VCF file
     vcf_file = WORKING_DIR + "vcf/" + ref_sample_name + ".vcf.gz"
     return vcf_file
-
-def get_number_of_individuals_of_sample(wildcards):
-    """
-    This function get the number of individuals for a given sample.
  
-    Returns
-    -------
-    A string with the number (integer) of individuals per sample 
+# Since the input and output list of a rule should have the same wildcards, I cannot have {sample} in the input and {mutant} in the output
+# Yet I have to add to every {mutant} VCF file the SNPs of the reference sample. 
+def get_mutant_vcf(wildcards):
+    """This function returns the VCF path of the mutant samples. 
     """
-    samples_filtered = samples.filter(items = [wildcards], axis=0)
-    print(samples_filtered)
-    nb_of_individuals = samples_filtered.n_individuals
-    return int(nb_of_individuals) # conversion to integer for compatibility with MutMap
+    return WORKING_DIR + "vcf/" + wildcards.mutant + ".vcf.gz"
+
 
 #################
 # Desired outputs
 #################
 MULTIQC = RESULT_DIR + "multiqc_report.html"
-#BAMS = expand(WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam", sample=SAMPLES)
+
 MUTMAP_VCF = expand(RESULT_DIR + "{sample}/mutmap/30_vcf/mutmap.vcf.gz", sample=SAMPLES)
 MUTMAP_ANNOTATED_VCF = expand(RESULT_DIR + "{sample}/snpeff/mutmap_annotated.vcf.gz", sample=SAMPLES)
 
 VCF = expand(RESULT_DIR + "merged_vcf/{sample}.merged_with_reference.vcf", sample=SAMPLES)
-MUTPLOTS = expand(RESULT_DIR + "mutplot/{mutant}/mutmap_plot.png", mutant=MUTANTS)
+
+TABLES = expand(RESULT_DIR + "tables/{mutant}.variants.tsv", mutant=MUTANTS)
 
 rule all:
     input:
         MULTIQC,
         VCF,
-        MUTPLOTS
+        TABLES
 #        MUTMAP_VCF,
 #        MUTMAP_ANNOTATED_VCF
     message:
@@ -275,9 +229,9 @@ rule bwa_align:
         READ_GROUP = SEQUENCER_ID + "." + FLOWCELL_NAME + "." + FLOWCELL_LANE + "." + BARCODE
         # If sample is single end, feeding only one fastq file (other outputs an empty BAM file)
         if sample_is_single_end(wildcards.sample):
-            shell("bwa mem -v 1 -t {threads} -R '@RG\\tID:{READ_GROUP}\\tPL:ILLUMINA\\tLB:{wildcards.sample}\\tSM:{wildcards.sample}' {params.db_prefix} {input.forward_fastq} >{output}")
+            shell("bwa mem -v 0 -t {threads} -R '@RG\\tID:{READ_GROUP}\\tPL:ILLUMINA\\tLB:{wildcards.sample}\\tSM:{wildcards.sample}' {params.db_prefix} {input.forward_fastq} >{output}")
         else:
-            shell("bwa mem -v 1 -t {threads} -R '@RG\\tID:{READ_GROUP}\\tPL:ILLUMINA\\tLB:{wildcards.sample}\\tSM:{wildcards.sample}' {params.db_prefix} {input.forward_fastq} {input.reverse_fastq} >{output}")
+            shell("bwa mem -v 0 -t {threads} -R '@RG\\tID:{READ_GROUP}\\tPL:ILLUMINA\\tLB:{wildcards.sample}\\tSM:{wildcards.sample}' {params.db_prefix} {input.forward_fastq} {input.reverse_fastq} >{output}")
 
 ###############################################
 # Post-alignment steps prior to variant calling
@@ -356,7 +310,8 @@ rule call_variants:
         "--fasta-ref {params.ref_genome} "
         "{input.bam} | "
         "bcftools call -vm -f GQ,GP -O u | "
-        "bcftools filter -O z -o {output.vcf}"
+        "bcftools filter -O z -o {output.vcf}; "
+        "bcftools index {output.vcf}"
 
 rule index_variant_files:
     input:
@@ -368,20 +323,22 @@ rule index_variant_files:
     shell:
         "bcftools index {input.vcf}"
 
+############################################################################################
+# For each mutant, I have to combine the VCF file of the reference sample to each mutant VCF
+# This will be useful for downstream SNP index and G' calculations
+############################################################################################
 
-rule add_reference_to_variant_file_for_mutplot:
+rule combine_mutant_vcf_with_reference_vcf:
     input:
-        vcf = WORKING_DIR + "vcf/{sample}.vcf.gz",
-        index = WORKING_DIR + "vcf/{sample}.vcf.gz.csi"
+        vcf = get_mutant_vcf
     output:
-        vcf_merged = RESULT_DIR + "merged_vcf/{sample}.merged_with_reference.vcf"
+        vcf_merged = RESULT_DIR + "merged_vcf/{mutant}.merged_with_reference.vcf"
     message:
-        "Adding reference SNPs to {wildcards.sample} vcf file"
+        "Adding reference SNPs to {wildcards.mutant} vcf file"
     params:
         reference_vcf = get_variant_file_of_reference_sample()
     shell:
         "bcftools merge "
-        "--force-samples "          # for the reference sample that will be duplicated
         "--output-type v "          # uncompressed vcf
         "{params.reference_vcf} "   # name of the reference sample
         "{input.vcf} > {output.vcf_merged}"
@@ -439,6 +396,35 @@ rule snpeff:
 ###########
 # QTLseqR
 ###########
+
+rule prepare_fasta_for_gatk:
+    input:
+        ref = REF_GENOME
+    output:
+        ref_dict = "temp/ref_genome.dict"
+    message:
+        "Creating sequence dictionary and index for {REF_GENOME}"
+    shell:
+        "samtools faidx {input.ref};"
+        "picard CreateSequenceDictionary -R {input.ref} -O {output.ref_dict}"
+
+rule convert_variants_to_table:
+    input:
+        vcf = RESULT_DIR + "merged_vcf/{mutant}.merged_with_reference.vcf",
+        ref_genome = REF_GENOME
+    output:
+        table = RESULT_DIR + "tables/{mutant}.variants.tsv"
+    message:
+        "Converting {wildcards.mutant} VCF to table for QTLseqR"
+    shell:
+        "gatk3 -T VariantsToTable "
+        "-V {input.vcf} "
+        "-F CHROM -F POS -F REF -F ALT "
+        "-GF AD -GF DP -GF GQ -GF PL "
+        "-R {input.ref_genome} "
+        "-o {output.table}"
+
+#basename_ref_genome = re.split(r'.fasta|.fa', REF_GENOME),
 # picard CreateSequenceDictionary -R config/refs/mutmap_ref.fasta -O config/refs/mutmap_ref.dict
 # samtools faidx config/refs/mutmap_ref.fasta
 
@@ -450,7 +436,4 @@ rule snpeff:
 ############################
 # Plots of mapping statistics
 #############################
-
-
-
 
