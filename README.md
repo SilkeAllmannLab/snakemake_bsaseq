@@ -6,13 +6,17 @@ A Snakemake pipeline to perform BSA-seq to identify causal the recessive mutatio
 
 - [1. Installation 🔨](#1-installation-%F0%9F%94%A8)
 	- [1.1 Install Miniconda and mamba](#11-install-miniconda-and-mamba)
-	- [1.2 Install the Snakemake pipeline dependencies](#12-install-the-snakemake-pipeline-dependencies)
+	- [1.2 Clone the pipeline repository :cat:](#12-clone-the-pipeline-repository-cat)
+	- [1.3 Install the Snakemake pipeline dependencies](#13-install-the-snakemake-pipeline-dependencies)
 - [2. Test run 🧪](#2-test-run-%F0%9F%A7%AA)
 	- [2.1 Fastq test files](#21-fastq-test-files)
 	- [2.2 Reference genome](#22-reference-genome)
 	- [2.3 Change default parameters if needed](#23-change-default-parameters-if-needed)
 	- [2.4 Run the pipeline](#24-run-the-pipeline)
-- [3. References 📖](#3-references-%F0%9F%93%96)
+- [3. Graphs](#3-graphs)
+	- [For each sample \(including reference sample\)](#for-each-sample-including-reference-sample)
+	- [For one given sample](#for-one-given-sample)
+- [4. References 📖](#4-references-%F0%9F%93%96)
 	- [MutMap software](#mutmap-software)
 	- [Snakemake](#snakemake)
 	- [SnpEff](#snpeff)
@@ -78,7 +82,19 @@ On a cluster managed with SLURM such as the [UvA-FNWI crunchomics](https://crunc
 1. `srun --time=12:00:00 --cpus-per-task=10 --mem-per-cpu=8G --pty bash -i`  followed by:  
 2. `conda activate bsaseq && snakemake -j 10`
 
-# 3. References 📖
+# 3. Graphs
+
+These graphs display the order of tasks from beginning to end. 
+
+## For each sample (including reference sample)
+![dag graph](./dag.png)
+
+## For one given sample
+![dag graph](./rulegraph_dag.png)
+
+
+
+# 4. References 📖
 
 ## MutMap software
 

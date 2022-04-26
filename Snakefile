@@ -6,6 +6,7 @@
 ###########
 # Libraries
 ###########
+from lib2to3.pytree import WildcardPattern
 import pandas as pd
 import os
 from subprocess import check_output
@@ -34,7 +35,9 @@ SAMPLES = samples.index.values.tolist()
 
 # List with only mutants
 REF_SAMPLE_NAME = samples.query("sample_type == 'reference'").index.values.tolist()
+
 MUTANTS = [s for s in SAMPLES if s not in REF_SAMPLE_NAME]
+
 
 ###########################
 # Input functions for rules
@@ -100,21 +103,16 @@ def get_mutant_vcf(wildcards):
 # Desired outputs
 #################
 MULTIQC = RESULT_DIR + "multiqc_report.html"
-
-MUTMAP_VCF = expand(RESULT_DIR + "{sample}/mutmap/30_vcf/mutmap.vcf.gz", sample=SAMPLES)
-MUTMAP_ANNOTATED_VCF = expand(RESULT_DIR + "{sample}/snpeff/mutmap_annotated.vcf.gz", sample=SAMPLES)
-
 VCF = expand(RESULT_DIR + "merged_vcf/{sample}.merged_with_reference.vcf", sample=SAMPLES)
-
-TABLES = expand(RESULT_DIR + "tables/{mutant}.variants.tsv", mutant=MUTANTS)
+SNPEFF_ANNOTATED_VCF = expand(RESULT_DIR + "snpeff/{sample}.merged_with_ref.snpeff.vcf", sample=SAMPLES)
+TABLES = expand(RESULT_DIR + "tables/{sample}.variants.tsv", sample=SAMPLES)
 
 rule all:
     input:
         MULTIQC,
-        VCF,
+#        VCF,
+        SNPEFF_ANNOTATED_VCF,
         TABLES
-#        MUTMAP_VCF,
-#        MUTMAP_ANNOTATED_VCF
     message:
         "BSA-seq pipeline run complete!"
     shell:
@@ -330,19 +328,86 @@ rule index_variant_files:
 
 rule combine_mutant_vcf_with_reference_vcf:
     input:
-        vcf = get_mutant_vcf
+        #vcf = get_mutant_vcf
+        vcf = WORKING_DIR + "vcf/{sample}.vcf.gz"
     output:
-        vcf_merged = RESULT_DIR + "merged_vcf/{mutant}.merged_with_reference.vcf"
+        vcf_merged = WORKING_DIR + "merged_vcf/{sample}.merged_with_reference.vcf"
     message:
-        "Adding reference SNPs to {wildcards.mutant} vcf file"
+        "Adding reference SNPs to {wildcards.sample} vcf file"
     params:
         reference_vcf = get_variant_file_of_reference_sample()
     shell:
         "bcftools merge "
+        "--force-samples "
         "--output-type v "          # uncompressed vcf
         "{params.reference_vcf} "   # name of the reference sample
         "{input.vcf} > {output.vcf_merged}"
-    
+
+
+rule snpeff:
+    input:
+        vcf = WORKING_DIR + "merged_vcf/{sample}.merged_with_reference.vcf"
+    output:
+        csv = RESULT_DIR + "snpeff/{sample}.merged_with_ref.snpeff.stats.csv",
+        vcf = RESULT_DIR + "snpeff/{sample}.merged_with_ref.snpeff.vcf"
+    message:
+        "Annotating SNPs of {wildcards.sample} with snpEff"
+    params:
+        snpeff_db = config["snpeff"]["database"],
+        output_format = config["snpeff"]["output_format"],
+        stats_fname = RESULT_DIR + "snpeff/{sample}" + "_snpeff_summary.html"
+    shell:
+        "snpEff "
+        "-o {params.output_format} "
+        "-csvStats {output.csv} "                            # creates CSV summary file instead of HTML
+        "{params.snpeff_db} "
+        "{input.vcf} > {output.vcf};"
+        "mv snpEff_summary.html {params.stats_fname}"
+
+###########
+# QTLseqR
+###########
+
+rule prepare_fasta_for_gatk:
+    input:
+        ref = REF_GENOME
+    output:
+        ref_dict = "temp/ref_genome.dict"
+    message:
+        "Creating sequence dictionary and index for {REF_GENOME}"
+    shell:
+        "samtools faidx {input.ref};"
+        "picard CreateSequenceDictionary -R {input.ref} -O {output.ref_dict}"
+
+rule convert_variants_to_table:
+    input:
+        vcf = RESULT_DIR + "snpeff/{sample}.merged_with_ref.snpeff.vcf",
+        ref_genome = REF_GENOME
+    output:
+        table = RESULT_DIR + "tables/{sample}.variants.tsv"
+    message:
+        "Converting {wildcards.sample} VCF to table for QTLseqR"
+    shell:
+        "gatk3 -T VariantsToTable "
+        "-V {input.vcf} "
+        "-F CHROM -F POS -F REF -F ALT "
+        "-GF AD -GF DP -GF GQ -GF PL "
+        "-R {input.ref_genome} "
+        "-o {output.table}"
+
+#basename_ref_genome = re.split(r'.fasta|.fa', REF_GENOME),
+# picard CreateSequenceDictionary -R config/refs/mutmap_ref.fasta -O config/refs/mutmap_ref.dict
+# samtools faidx config/refs/mutmap_ref.fasta
+
+#gatk3 -T VariantsToTable -V results/merged_vcf/mutant_01.merged_with_reference.vcf 
+# -F CHROM -F POS -F REF -F ALT -GF AD -GF DP -GF GQ -GF PL -R 
+# config/refs/mutmap_ref.fasta -o results/mutant_01.table
+
+
+############################
+# Plots of mapping statistics
+#############################
+
 ########
 # MutMap
 ########
@@ -367,73 +432,3 @@ rule mutplot:
         "--window {params.window_size} "
         "--N-bulk {params.n_individuals} "
         "--out {params.outdir_mutmap}"
-
-########
-# snpEff
-########
-
-rule snpeff:
-    input:
-        RESULT_DIR + "{sample}/mutmap/30_vcf/mutmap.vcf.gz"
-        #RESULT_DIR + "mutmap/30_vcf/mutmap.vcf.gz"
-    output:
-        csv = RESULT_DIR + "{sample}/snpeff/stats.csv",
-        ann = RESULT_DIR + "{sample}/snpeff/mutmap_annotated.vcf.gz"
-    message:
-        "Annotating SNPs with snpEff"
-    params:
-        snpeff_db = config["snpeff"]["database"],
-        output_format = config["snpeff"]["output_format"]
-    shell:
-        "snpEff ann "
-        "-o {params.output_format} "
-        "-csvStats "                            # creates CSV summary file instead of HTML
-        "-stats {output.csv} "
-        "{params.snpeff_db} "
-        "{input} > {output.ann}"
-
-
-###########
-# QTLseqR
-###########
-
-rule prepare_fasta_for_gatk:
-    input:
-        ref = REF_GENOME
-    output:
-        ref_dict = "temp/ref_genome.dict"
-    message:
-        "Creating sequence dictionary and index for {REF_GENOME}"
-    shell:
-        "samtools faidx {input.ref};"
-        "picard CreateSequenceDictionary -R {input.ref} -O {output.ref_dict}"
-
-rule convert_variants_to_table:
-    input:
-        vcf = RESULT_DIR + "merged_vcf/{mutant}.merged_with_reference.vcf",
-        ref_genome = REF_GENOME
-    output:
-        table = RESULT_DIR + "tables/{mutant}.variants.tsv"
-    message:
-        "Converting {wildcards.mutant} VCF to table for QTLseqR"
-    shell:
-        "gatk3 -T VariantsToTable "
-        "-V {input.vcf} "
-        "-F CHROM -F POS -F REF -F ALT "
-        "-GF AD -GF DP -GF GQ -GF PL "
-        "-R {input.ref_genome} "
-        "-o {output.table}"
-
-#basename_ref_genome = re.split(r'.fasta|.fa', REF_GENOME),
-# picard CreateSequenceDictionary -R config/refs/mutmap_ref.fasta -O config/refs/mutmap_ref.dict
-# samtools faidx config/refs/mutmap_ref.fasta
-
-#gatk3 -T VariantsToTable -V results/merged_vcf/mutant_01.merged_with_reference.vcf 
-# -F CHROM -F POS -F REF -F ALT -GF AD -GF DP -GF GQ -GF PL -R 
-# config/refs/mutmap_ref.fasta -o results/mutant_01.table
-
-
-############################
-# Plots of mapping statistics
-#############################
-
