@@ -216,7 +216,7 @@ rule bwa_align:
         "mapping {wildcards.sample} reads to genomic reference"
     params:
         db_prefix = WORKING_DIR + "index/genome"
-    threads: 5
+    threads: 10
     run:
         # Building the read group id (sequencer_id + flowcell_name + lane_number + barcode)
         SEQUENCER_ID=check_output("head -n 1 " + input.forward_fastq + " |cut -d: -f1",shell=True).decode().strip()
@@ -242,7 +242,7 @@ rule samtools_sort_by_qname:
         temp(WORKING_DIR + "mapped/{sample}.qname_sorted.bam")
     message:
          "sorting {wildcards.sample} bam file by read name (QNAME field)"
-    threads: 4
+    threads: 10
     shell:
         "samtools sort -n -@ {threads} {input} > {output}"
 
@@ -264,7 +264,7 @@ rule samtools_sort_by_coordinates:
         temp(WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.bam")
     message:
         "sorting {wildcards.sample} bam file by coordinate"
-    threads: 4
+    threads: 10
     shell:
         "samtools sort -@ {threads} {input} > {output}"
 
@@ -275,7 +275,7 @@ rule mark_duplicate:
         WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam"
     message:
         "marking duplicates in {wildcards.sample} bam file"
-    threads: 4
+    threads: 10
     shell:
         "samtools markdup -@ {threads} {input} {output}"
 
@@ -291,7 +291,7 @@ rule call_variants:
         vcf = WORKING_DIR + "vcf/{sample}.vcf.gz"
     message:
         "Call variants for {wildcards.sample}"
-    threads: 5
+    threads: 10
     params:
         mapping_quality = config["mutmap"]["min_mq"],
         minimum_base_quality = config["mutmap"]["min_bq"],
@@ -306,6 +306,7 @@ rule call_variants:
         "--adjust-MQ {params.adjust_mapping_quality} " # "adjust-MQ" in mpileup.
         "--output-type u "                             # uncompressed output
         "--fasta-ref {params.ref_genome} "
+        "--threads {threads} "
         "{input.bam} | "
         "bcftools call -vm -f GQ,GP -O u | "
         "bcftools filter -O z -o {output.vcf}; "
