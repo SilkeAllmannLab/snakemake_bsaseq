@@ -372,7 +372,7 @@ rule prepare_fasta_for_gatk:
     input:
         ref = REF_GENOME
     output:
-        ref_dict = "temp/ref_genome.dict"
+        picard_dict = os.path.splitext(REF_GENOME)[0] + ".dict"
     message:
         "Creating sequence dictionary and index for {REF_GENOME}"
     shell:
@@ -381,9 +381,9 @@ rule prepare_fasta_for_gatk:
 
 rule convert_variants_to_table:
     input:
+        picard_dict = rules.prepare_fasta_for_gatk.output.picard_dict, # picard dict
         vcf = RESULT_DIR + "snpeff/{sample}.merged_with_ref.snpeff.vcf",
-        ref_genome = REF_GENOME,
-        ref_dict = "temp/ref_genome.dict"
+        ref_genome = REF_GENOME
     output:
         table = RESULT_DIR + "tables/{sample}.variants.tsv"
     message:
