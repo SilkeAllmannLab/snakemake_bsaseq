@@ -6,7 +6,6 @@
 ###########
 # Libraries
 ###########
-from lib2to3.pytree import WildcardPattern
 import pandas as pd
 import os
 from subprocess import check_output
