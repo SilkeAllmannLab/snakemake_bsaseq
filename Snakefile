@@ -253,7 +253,7 @@ rule samtools_fixmate:
         temp(WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.bam")
     message:
         "Fixing mate in {wildcards.sample} sorted bam file"
-    threads: 4
+    threads: 10
     shell:
         "samtools fixmate -m -@ {threads} {input} {output}"
 
@@ -383,7 +383,8 @@ rule prepare_fasta_for_gatk:
 rule convert_variants_to_table:
     input:
         vcf = RESULT_DIR + "snpeff/{sample}.merged_with_ref.snpeff.vcf",
-        ref_genome = REF_GENOME
+        ref_genome = REF_GENOME,
+        ref_dict = "temp/ref_genome.dict"
     output:
         table = RESULT_DIR + "tables/{sample}.variants.tsv"
     message:
