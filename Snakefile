@@ -298,7 +298,7 @@ rule call_variants:
         ref_genome = REF_GENOME
     shell:
         "bcftools mpileup "
-        "--annotate AD,ADF,ADR "                       # allelic depth, allelic depth forward strand, allelic depth reverse strand
+        "--annotate FORMAT/AD,FORMAT/ADF,FORMAT/ADR,FORMAT/DP,FORMAT/SP,INFO/AD,INFO/ADF,INFO/ADR "
         "--no-BAQ "                                    # Disable probabilistic realignment for the computation of base alignment quality (BAQ). 
         "--min-MQ {params.mapping_quality} "           # Minimum mapping quality for an alignment to be used [0]
         "--min-BQ {params.minimum_base_quality} "      # Minimum base quality for a base to be considered [13]
@@ -307,7 +307,7 @@ rule call_variants:
         "--fasta-ref {params.ref_genome} "
         "--threads {threads} "
         "{input.bam} | "
-        "bcftools call -vm -f GQ,GP -O u | "
+        "bcftools call --multiallelic-caller -variants-only --skip-variants indels -f GQ,GP -O u | "
         "bcftools filter -O z -o {output.vcf}; "
         "bcftools index {output.vcf}"
 
@@ -389,7 +389,7 @@ rule convert_variants_to_table:
     message:
         "Converting {wildcards.sample} VCF to table for QTLseqR"
     shell:
-        "gatk3 -T VariantsToTable "
+        "gatk -T VariantsToTable "
         "-V {input.vcf} "
         "-F CHROM -F POS -F REF -F ALT "
         "-GF AD -GF DP -GF GQ -GF PL "
