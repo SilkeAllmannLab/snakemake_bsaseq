@@ -35,9 +35,6 @@ SAMPLES = samples.index.values.tolist()
 # List with only mutants
 REF_SAMPLE_NAME = samples.query("sample_type == 'reference'").index.values.tolist()
 
-MUTANTS = [s for s in SAMPLES if s not in REF_SAMPLE_NAME]
-
-
 ###########################
 # Input functions for rules
 ###########################
@@ -103,13 +100,16 @@ def get_mutant_vcf(wildcards):
 #################
 MULTIQC = RESULT_DIR + "multiqc_report.html"
 VCF = expand(RESULT_DIR + "merged_vcf/{sample}.merged_with_reference.vcf", sample=SAMPLES)
-SNPEFF_ANNOTATED_VCF = expand(RESULT_DIR + "snpeff/{sample}.merged_with_ref.snpeff.vcf", sample=SAMPLES)
+ALL_VCFS = RESULT_DIR + "vcf/all_samples.vcf.gz"
+SNPEFF_ANNOTATED_VCF = RESULT_DIR + "snpeff/all_samples.snpeff.vcf"
 TABLES = expand(RESULT_DIR + "tables/{sample}.variants.tsv", sample=SAMPLES)
+
+
 
 rule all:
     input:
         MULTIQC,
-#        VCF,
+        ALL_VCFS,
         SNPEFF_ANNOTATED_VCF,
         TABLES
     message:
@@ -321,6 +321,39 @@ rule index_variant_files:
     shell:
         "bcftools index {input.vcf}"
 
+rule merge_all_variants: 
+    input:
+        vcfs = expand(WORKING_DIR + "vcf/{sample}.vcf.gz", sample=SAMPLES)
+    output:
+        WORKING_DIR + "vcf/all_samples.vcf"
+    message:
+        "Merging all variant files"
+    shell:
+        "bcftools merge "
+        "--output-type v "          # compressed vcf
+        "{input.vcfs} > {output}"
+
+rule snpeff:
+    input:
+        vcf = WORKING_DIR + "vcf/all_samples.vcf"
+    output:
+        csv = RESULT_DIR + "snpeff/all_samples.snpeff.stats.csv",
+        vcf = RESULT_DIR + "snpeff/all_samples.snpeff.vcf"
+    message:
+        "Annotating all detected SNPs with snpEff"
+    params:
+        snpeff_db = config["snpeff"]["database"],
+        output_format = config["snpeff"]["output_format"],
+        stats_fname = RESULT_DIR + "snpeff/all_samples" + "_snpeff_summary.html"
+    shell:
+        "snpEff "
+        "-o {params.output_format} "
+        "-csvStats {output.csv} "                            # creates CSV summary file instead of HTML
+        "{params.snpeff_db} "
+        "{input.vcf} > {output.vcf};"
+        "mv snpEff_summary.html {params.stats_fname}"
+
+
 ############################################################################################
 # For each mutant, I have to combine the VCF file of the reference sample to each mutant VCF
 # This will be useful for downstream SNP index and G' calculations
@@ -341,27 +374,6 @@ rule combine_mutant_vcf_with_reference_vcf:
         "--output-type v "          # uncompressed vcf
         "{params.reference_vcf} "   # name of the reference sample
         "{input.vcf} > {output.vcf_merged}"
-
-
-rule snpeff:
-    input:
-        vcf = WORKING_DIR + "merged_vcf/{sample}.merged_with_reference.vcf"
-    output:
-        csv = RESULT_DIR + "snpeff/{sample}.merged_with_ref.snpeff.stats.csv",
-        vcf = RESULT_DIR + "snpeff/{sample}.merged_with_ref.snpeff.vcf"
-    message:
-        "Annotating SNPs of {wildcards.sample} with snpEff"
-    params:
-        snpeff_db = config["snpeff"]["database"],
-        output_format = config["snpeff"]["output_format"],
-        stats_fname = RESULT_DIR + "snpeff/{sample}" + "_snpeff_summary.html"
-    shell:
-        "snpEff "
-        "-o {params.output_format} "
-        "-csvStats {output.csv} "                            # creates CSV summary file instead of HTML
-        "{params.snpeff_db} "
-        "{input.vcf} > {output.vcf};"
-        "mv snpEff_summary.html {params.stats_fname}"
 
 ###########
 # QTLseqR
