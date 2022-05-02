@@ -93,7 +93,6 @@ These graphs display the order of tasks from beginning to end.
 ![dag graph](./rulegraph_dag.png)
 
 
-
 # 4. References 📖
 
 ## MutMap software

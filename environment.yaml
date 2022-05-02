@@ -12,5 +12,5 @@ dependencies:
   - snpeff = 5.0
   - samtools = 1.10
   - bwa = 0.7.15
-  - gatk = 3.8
+  - gatk4 = 4.2.0.0
   - picard = 2.27.1

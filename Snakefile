@@ -307,15 +307,15 @@ rule call_variants:
         "--fasta-ref {params.ref_genome} "
         "--threads {threads} "
         "{input.bam} | "
-        "bcftools call --multiallelic-caller -variants-only --skip-variants indels -f GQ,GP -O u | "
+        "bcftools call -m --skip-variants indels -f GQ,GP -O u | "
         "bcftools filter -O z -o {output.vcf}; "
         "bcftools index {output.vcf}"
 
 rule index_variant_files:
     input:
-        vcf = WORKING_DIR + "vcf/{sample}.vcf.gz"
+        vcf = RESULT_DIR + "vcf/{sample}.vcf.gz"
     output:
-        index = WORKING_DIR + "vcf/{sample}.vcf.gz.csi"
+        index = RESULT_DIR + "vcf/{sample}.vcf.gz.csi"
     message:
         "Indexing {wildcards.sample} VCF file"
     shell:
@@ -328,8 +328,7 @@ rule index_variant_files:
 
 rule combine_mutant_vcf_with_reference_vcf:
     input:
-        #vcf = get_mutant_vcf
-        vcf = WORKING_DIR + "vcf/{sample}.vcf.gz"
+        vcf = RESULT_DIR + "vcf/{sample}.vcf.gz"
     output:
         vcf_merged = WORKING_DIR + "merged_vcf/{sample}.merged_with_reference.vcf"
     message:
@@ -372,7 +371,7 @@ rule prepare_fasta_for_gatk:
     input:
         ref = REF_GENOME
     output:
-        picard_dict = os.path.splitext(REF_GENOME)[0] + ".dict"
+        ref_dict = os.path.splitext(REF_GENOME)[0] + ".dict"
     message:
         "Creating sequence dictionary and index for {REF_GENOME}"
     shell:
@@ -381,7 +380,7 @@ rule prepare_fasta_for_gatk:
 
 rule convert_variants_to_table:
     input:
-        picard_dict = rules.prepare_fasta_for_gatk.output.picard_dict, # picard dict
+        picard_dict = rules.prepare_fasta_for_gatk.output.ref_dict, # picard dict
         vcf = RESULT_DIR + "snpeff/{sample}.merged_with_ref.snpeff.vcf",
         ref_genome = REF_GENOME
     output:
@@ -389,12 +388,12 @@ rule convert_variants_to_table:
     message:
         "Converting {wildcards.sample} VCF to table for QTLseqR"
     shell:
-        "gatk -T VariantsToTable "
+        "gatk VariantsToTable "
         "-V {input.vcf} "
         "-F CHROM -F POS -F REF -F ALT "
         "-GF AD -GF DP -GF GQ -GF PL "
         "-R {input.ref_genome} "
-        "-o {output.table}"
+        "-O {output.table}"
 
 #basename_ref_genome = re.split(r'.fasta|.fa', REF_GENOME),
 # picard CreateSequenceDictionary -R config/refs/mutmap_ref.fasta -O config/refs/mutmap_ref.dict
