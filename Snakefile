@@ -99,11 +99,11 @@ def get_mutant_vcf(wildcards):
 # Desired outputs
 #################
 MULTIQC = RESULT_DIR + "multiqc_report.html"
-VCF = expand(RESULT_DIR + "merged_vcf/{sample}.merged_with_reference.vcf", sample=SAMPLES)
+
 ALL_VCFS = RESULT_DIR + "vcf/all_samples.vcf.gz"
 SNPEFF_ANNOTATED_VCF = RESULT_DIR + "snpeff/all_samples.snpeff.vcf"
-TABLES = expand(RESULT_DIR + "tables/{sample}.variants.tsv", sample=SAMPLES)
 
+VARIANT_TABLE = RESULT_DIR + "tables/all_samples.variants.tsv"
 
 
 rule all:
@@ -111,7 +111,7 @@ rule all:
         MULTIQC,
         ALL_VCFS,
         SNPEFF_ANNOTATED_VCF,
-        TABLES
+        VARIANT_TABLE
     message:
         "BSA-seq pipeline run complete!"
     shell:
@@ -165,7 +165,6 @@ rule multiqc:
         "multiqc --force "
         "--outdir {params.outdir} "
         "{params.fastp_directory} "
-
 
 ###########
 # Alignment
@@ -292,13 +291,15 @@ rule call_variants:
         "Call variants for {wildcards.sample}"
     threads: 10
     params:
-        mapping_quality = config["mutmap"]["min_mq"],
-        minimum_base_quality = config["mutmap"]["min_bq"],
-        adjust_mapping_quality = config["mutmap"]["adjust_mq"],
-        ref_genome = REF_GENOME
+        mapping_quality         = config["bcftools"]["min_mq"],
+        minimum_base_quality    = config["bcftools"]["min_bq"],
+        adjust_mapping_quality  = config["bcftools"]["adjust_mq"],
+        max_depth               = config["bcftools"]["max_depth"],
+        ref_genome              = REF_GENOME
     shell:
         "bcftools mpileup "
-        "--annotate FORMAT/AD,FORMAT/ADF,FORMAT/ADR,FORMAT/DP,FORMAT/SP,INFO/AD,INFO/ADF,INFO/ADR "
+        "--annotate FORMAT/AD,FORMAT/DP "
+        "--max-depth {params.max_depth} "
         "--no-BAQ "                                    # Disable probabilistic realignment for the computation of base alignment quality (BAQ). 
         "--min-MQ {params.mapping_quality} "           # Minimum mapping quality for an alignment to be used [0]
         "--min-BQ {params.minimum_base_quality} "      # Minimum base quality for a base to be considered [13]
@@ -307,7 +308,7 @@ rule call_variants:
         "--fasta-ref {params.ref_genome} "
         "--threads {threads} "
         "{input.bam} | "
-        "bcftools call -m --skip-variants indels -f GQ,GP -O u | "
+        "bcftools call --variants-only -m --skip-variants indels -f GQ,GP -O u | "
         "bcftools filter -O z -o {output.vcf}; "
         "bcftools index {output.vcf}"
 
@@ -325,17 +326,55 @@ rule merge_all_variants:
     input:
         vcfs = expand(WORKING_DIR + "vcf/{sample}.vcf.gz", sample=SAMPLES)
     output:
-        WORKING_DIR + "vcf/all_samples.vcf"
+        vcf =   RESULT_DIR + "vcf/all_samples.vcf.gz",
+        index = RESULT_DIR + "vcf/all_samples.vcf.gz.tbi"
     message:
         "Merging all variant files"
     shell:
         "bcftools merge "
-        "--output-type v "          # compressed vcf
-        "{input.vcfs} > {output}"
+        "--output-type z "                      # compressed vcf
+        "{input.vcfs} > {output.vcf};"
+        "gatk IndexFeatureFile --input {output.vcf}" # creates index
 
+###########################
+# prepare table for QTLseqR
+###########################
+
+rule prepare_fasta_for_gatk:
+    input:
+        ref = REF_GENOME
+    output:
+        ref_dict = os.path.splitext(REF_GENOME)[0] + ".dict"
+    message:
+        "Creating sequence dictionary and index for {REF_GENOME}"
+    shell:
+        "samtools faidx {input.ref};"
+        "picard CreateSequenceDictionary -R {input.ref} -O {output.ref_dict}"
+
+rule convert_variants_to_table:
+    input:
+        picard_dict = rules.prepare_fasta_for_gatk.output.ref_dict, # picard dict
+        vcf = RESULT_DIR + "vcf/all_samples.vcf.gz",
+        ref_genome = REF_GENOME
+    output:
+        table = RESULT_DIR + "tables/all_samples.variants.tsv"
+    message:
+        "Converting VCF from all samples to table for QTLseqR"
+    shell:
+        "gatk VariantsToTable "
+        "-V {input.vcf} "
+        "-F CHROM -F POS -F REF -F ALT "
+        "-GF AD -GF DP -GF GQ -GF PL "
+        "-R {input.ref_genome} "
+        "-O {output.table}"
+
+
+########
+# snpEff
+########
 rule snpeff:
     input:
-        vcf = WORKING_DIR + "vcf/all_samples.vcf"
+        vcf = RESULT_DIR + "vcf/all_samples.vcf.gz"
     output:
         csv = RESULT_DIR + "snpeff/all_samples.snpeff.stats.csv",
         vcf = RESULT_DIR + "snpeff/all_samples.snpeff.vcf"
@@ -353,69 +392,6 @@ rule snpeff:
         "{input.vcf} > {output.vcf};"
         "mv snpEff_summary.html {params.stats_fname}"
 
-
-############################################################################################
-# For each mutant, I have to combine the VCF file of the reference sample to each mutant VCF
-# This will be useful for downstream SNP index and G' calculations
-############################################################################################
-
-rule combine_mutant_vcf_with_reference_vcf:
-    input:
-        vcf = RESULT_DIR + "vcf/{sample}.vcf.gz"
-    output:
-        vcf_merged = WORKING_DIR + "merged_vcf/{sample}.merged_with_reference.vcf"
-    message:
-        "Adding reference SNPs to {wildcards.sample} vcf file"
-    params:
-        reference_vcf = get_variant_file_of_reference_sample()
-    shell:
-        "bcftools merge "
-        "--force-samples "
-        "--output-type v "          # uncompressed vcf
-        "{params.reference_vcf} "   # name of the reference sample
-        "{input.vcf} > {output.vcf_merged}"
-
-###########
-# QTLseqR
-###########
-
-rule prepare_fasta_for_gatk:
-    input:
-        ref = REF_GENOME
-    output:
-        ref_dict = os.path.splitext(REF_GENOME)[0] + ".dict"
-    message:
-        "Creating sequence dictionary and index for {REF_GENOME}"
-    shell:
-        "samtools faidx {input.ref};"
-        "picard CreateSequenceDictionary -R {input.ref} -O {output.ref_dict}"
-
-rule convert_variants_to_table:
-    input:
-        picard_dict = rules.prepare_fasta_for_gatk.output.ref_dict, # picard dict
-        vcf = RESULT_DIR + "snpeff/{sample}.merged_with_ref.snpeff.vcf",
-        ref_genome = REF_GENOME
-    output:
-        table = RESULT_DIR + "tables/{sample}.variants.tsv"
-    message:
-        "Converting {wildcards.sample} VCF to table for QTLseqR"
-    shell:
-        "gatk VariantsToTable "
-        "-V {input.vcf} "
-        "-F CHROM -F POS -F REF -F ALT "
-        "-GF AD -GF DP -GF GQ -GF PL "
-        "-R {input.ref_genome} "
-        "-O {output.table}"
-
-#basename_ref_genome = re.split(r'.fasta|.fa', REF_GENOME),
-# picard CreateSequenceDictionary -R config/refs/mutmap_ref.fasta -O config/refs/mutmap_ref.dict
-# samtools faidx config/refs/mutmap_ref.fasta
-
-#gatk3 -T VariantsToTable -V results/merged_vcf/mutant_01.merged_with_reference.vcf 
-# -F CHROM -F POS -F REF -F ALT -GF AD -GF DP -GF GQ -GF PL -R 
-# config/refs/mutmap_ref.fasta -o results/mutant_01.table
-
-
 ############################
 # Plots of mapping statistics
 #############################
@@ -427,7 +403,7 @@ rule convert_variants_to_table:
 rule mutplot:
     input:
         ref_fasta = REF_GENOME,
-        vcf = RESULT_DIR + "merged_vcf/{mutant}.merged_with_reference.vcf"
+        vcf = RESULT_DIR + "merged_vcf/{sample}.merged_with_reference.vcf"
     output:
         mutplot = RESULT_DIR + "mutplot/{mutant}/mutmap_plot.png"
     message:
