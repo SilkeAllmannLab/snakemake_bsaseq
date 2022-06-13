@@ -99,10 +99,8 @@ def get_mutant_vcf(wildcards):
 # Desired outputs
 #################
 MULTIQC = RESULT_DIR + "multiqc_report.html"
-
 ALL_VCFS = RESULT_DIR + "vcf/all_samples.vcf.gz"
 SNPEFF_ANNOTATED_VCF = RESULT_DIR + "snpeff/all_samples.snpeff.vcf"
-
 VARIANT_TABLE = RESULT_DIR + "tables/all_samples.variants.tsv"
 
 
@@ -278,9 +276,55 @@ rule mark_duplicate:
         "samtools markdup -@ {threads} {input} {output}"
 
 
-##############
-# Variant call
-##############
+########################
+# Variant call with GATK
+########################
+rule prepare_fasta_for_gatk:
+    input:
+        ref = REF_GENOME
+    output:
+        ref_dict = os.path.splitext(REF_GENOME)[0] + ".dict"
+    message:
+        "Creating sequence dictionary and index for {REF_GENOME}"
+    shell:
+        "samtools faidx {input.ref};"
+        "picard CreateSequenceDictionary -R {input.ref} -O {output.ref_dict}"
+
+rule call_variants_with_gatk:
+    input:
+        bam = WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam",
+        ref = REF_GENOME,
+        ref_dict = rules.prepare_fasta_for_gatk.output.ref_dict
+    output:
+        gvcf = WORKING_DIR + "gatk/{sample}.g.vcf.gz"
+    message:
+        "Calling {wildcards.sample} variants with GATK"
+    shell:
+        "gatk HaplotypeCaller  "
+        "-R {input.ref} "
+        "-I {input.bam} "
+        "-O {output.gvcf} "
+        "-ERC GVCF "
+ 
+rule joint_genotypying_with_gatk:
+    input:
+        expand(WORKING_DIR + "gatk/{sample}.g.vcf.gz", sample=SAMPLES)
+    output:
+        RESULT_DIR + "gatk/all_samples.gatk.vcf.gz"
+    message:
+        "Joint cohort variant calling with GATK"
+    shell:
+        "gatk HaplotypeCaller  "
+        "-R {input.ref} "
+        "-I {input.bam} "
+        "-O {output.gvcf} "
+        "-ERC GVCF "
+
+        
+
+############################
+# Variant call with samtools
+############################
 
 rule call_variants:
     input:
@@ -339,17 +383,6 @@ rule merge_all_variants:
 ###########################
 # prepare table for QTLseqR
 ###########################
-
-rule prepare_fasta_for_gatk:
-    input:
-        ref = REF_GENOME
-    output:
-        ref_dict = os.path.splitext(REF_GENOME)[0] + ".dict"
-    message:
-        "Creating sequence dictionary and index for {REF_GENOME}"
-    shell:
-        "samtools faidx {input.ref};"
-        "picard CreateSequenceDictionary -R {input.ref} -O {output.ref_dict}"
 
 rule convert_variants_to_table:
     input:
