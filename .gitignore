@@ -132,3 +132,4 @@ config/fastq/
 config/refs/
 .DS_Store
 .snakemake/
+.Rproj.user

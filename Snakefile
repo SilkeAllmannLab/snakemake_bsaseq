@@ -21,7 +21,7 @@ WORKING_DIR = config["working_dir"]
 RESULT_DIR = config["result_dir"]
 TRIMMED_DIR = WORKING_DIR + "trimmed/"
 
-# MutMap parameters
+# Reference genome
 REF_GENOME = config["ref_genome"]
 
 ########################
@@ -31,9 +31,6 @@ REF_GENOME = config["ref_genome"]
 # create lists containing the sample names and conditions
 samples = pd.read_csv(config["samples"], dtype=str, index_col=0, sep=",")
 SAMPLES = samples.index.values.tolist()
-
-# List with only mutants
-REF_SAMPLE_NAME = samples.query("sample_type == 'reference'").index.values.tolist()
 
 ###########################
 # Input functions for rules
@@ -67,39 +64,12 @@ def get_trim_names(wildcards):
         inFile = samples.loc[(wildcards.sample), ["fq1", "fq2"]].dropna()
         return "--in1 " + inFile[0] + " --in2 " + inFile[1] + " --out1 " + WORKING_DIR + "trimmed/" + wildcards.sample + "_R1_trimmed.fq.gz --out2 "  + WORKING_DIR + "trimmed/" + wildcards.sample + "_R2_trimmed.fq.gz"
 
-def get_variant_file_of_reference_sample():
-    '''
-    This function re-creates the path to the VCF file of the reference sample.
- 
-    Returns
-    -------
-    A string with the path to the reference VCF file 
-    '''
-    # Verify that 'reference' is in the 'sample_type' column of the Pandas samples_df
-    sample_types = samples.sample_type.unique()
-    #if "reference" not in sample_types:
-    #    raise ValueError("sample type should be either equal to 'reference' or 'mutant'")
-    
-    # Get the sample name corresponding to the reference sample
-    ref_sample_name = samples.query("sample_type == 'reference'").index.values[0]
-
-    # Re-create the path of the VCF file
-    vcf_file = WORKING_DIR + "vcf/" + ref_sample_name + ".vcf.gz"
-    return vcf_file
- 
-# Since the input and output list of a rule should have the same wildcards, I cannot have {sample} in the input and {mutant} in the output
-# Yet I have to add to every {mutant} VCF file the SNPs of the reference sample. 
-def get_mutant_vcf(wildcards):
-    """This function returns the VCF path of the mutant samples. 
-    """
-    return WORKING_DIR + "vcf/" + wildcards.mutant + ".vcf.gz"
-
-
 #################
 # Desired outputs
 #################
 MULTIQC = RESULT_DIR + "multiqc_report.html"
 ALL_VCFS = RESULT_DIR + "vcf/all_samples.vcf.gz"
+GATK_VCF = RESULT_DIR + "gatk/all_samples.gatk.vcf.gz"
 SNPEFF_ANNOTATED_VCF = RESULT_DIR + "snpeff/all_samples.snpeff.vcf"
 VARIANT_TABLE = RESULT_DIR + "tables/all_samples.variants.tsv"
 
@@ -109,13 +79,13 @@ rule all:
         MULTIQC,
         ALL_VCFS,
         SNPEFF_ANNOTATED_VCF,
-        VARIANT_TABLE
+        VARIANT_TABLE,
+        GATK_VCF
     message:
         "BSA-seq pipeline run complete!"
     shell:
         "cp config/config.yaml {RESULT_DIR};"
         "cp config/samples.csv {RESULT_DIR};"
-        #"rm -r {WORKING_DIR}"
 
 #######
 # Rules
@@ -235,7 +205,7 @@ rule samtools_sort_by_qname:
     input:
         WORKING_DIR + "mapped/{sample}.bam"
     output:
-        temp(WORKING_DIR + "mapped/{sample}.qname_sorted.bam")
+        temp(WORKING_DIR + "samtools/{sample}.qname_sorted.bam")
     message:
          "sorting {wildcards.sample} bam file by read name (QNAME field)"
     threads: 10
@@ -244,9 +214,9 @@ rule samtools_sort_by_qname:
 
 rule samtools_fixmate:
     input:
-        WORKING_DIR + "mapped/{sample}.qname_sorted.bam"
+        WORKING_DIR + "samtools/{sample}.qname_sorted.bam"
     output:
-        temp(WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.bam")
+        temp(WORKING_DIR + "samtools/{sample}.qname_sorted.fixed.bam")
     message:
         "Fixing mate in {wildcards.sample} sorted bam file"
     threads: 10
@@ -255,9 +225,9 @@ rule samtools_fixmate:
 
 rule samtools_sort_by_coordinates:
     input:
-        WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.bam"
+        WORKING_DIR + "samtools/{sample}.qname_sorted.fixed.bam"
     output:
-        temp(WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.bam")
+        temp(WORKING_DIR + "samtools/{sample}.qname_sorted.fixed.coord_sorted.bam")
     message:
         "sorting {wildcards.sample} bam file by coordinate"
     threads: 10
@@ -266,14 +236,15 @@ rule samtools_sort_by_coordinates:
 
 rule mark_duplicate:
     input:
-        WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.bam"
+        WORKING_DIR + "samtools/{sample}.qname_sorted.fixed.coord_sorted.bam"
     output:
-        WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam"
+        WORKING_DIR + "samtools/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam"
     message:
         "marking duplicates in {wildcards.sample} bam file"
     threads: 10
     shell:
-        "samtools markdup -@ {threads} {input} {output}"
+        "samtools markdup -@ {threads} {input} {output};"
+        "samtools index {output}"
 
 
 ########################
@@ -292,7 +263,7 @@ rule prepare_fasta_for_gatk:
 
 rule call_variants_with_gatk:
     input:
-        bam = WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam",
+        bam = WORKING_DIR + "samtools/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam",
         ref = REF_GENOME,
         ref_dict = rules.prepare_fasta_for_gatk.output.ref_dict
     output:
@@ -308,15 +279,16 @@ rule call_variants_with_gatk:
  
 rule joint_genotypying_with_gatk:
     input:
-        expand(WORKING_DIR + "gatk/{sample}.g.vcf.gz", sample=SAMPLES)
+        gvcfs = expand(WORKING_DIR + "gatk/{sample}.g.vcf.gz", sample=SAMPLES),
+        ref = REF_GENOME
     output:
-        RESULT_DIR + "gatk/all_samples.gatk.vcf.gz"
+        gvcf = RESULT_DIR + "gatk/all_samples.gatk.vcf.gz"
     message:
         "Joint cohort variant calling with GATK"
     shell:
         "gatk HaplotypeCaller  "
         "-R {input.ref} "
-        "-I {input.bam} "
+        "-I {input.gvcfs} "
         "-O {output.gvcf} "
         "-ERC GVCF "
 
@@ -425,31 +397,3 @@ rule snpeff:
         "{input.vcf} > {output.vcf};"
         "mv snpEff_summary.html {params.stats_fname}"
 
-############################
-# Plots of mapping statistics
-#############################
-
-########
-# MutMap
-########
-
-rule mutplot:
-    input:
-        ref_fasta = REF_GENOME,
-        vcf = RESULT_DIR + "merged_vcf/{sample}.merged_with_reference.vcf"
-    output:
-        mutplot = RESULT_DIR + "mutplot/{mutant}/mutmap_plot.png"
-    message:
-        "Running mutplot on {wildcards.mutant}"
-    params:
-        window_size           = config["mutmap"]["window_size"],
-        step_size             = config["mutmap"]["step_size"],
-        n_individuals         = lambda wildcards: int(samples.filter(items = [wildcards.mutant], axis=0).iloc[0]["n_individuals"]),
-        outdir_mutmap         = RESULT_DIR + "mutplot/{mutant}/"  
-    threads: 10
-    shell:
-        "mutplot "
-        "--vcf {input.vcf} "
-        "--window {params.window_size} "
-        "--N-bulk {params.n_individuals} "
-        "--out {params.outdir_mutmap}"
