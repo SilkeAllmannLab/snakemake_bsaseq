@@ -31,6 +31,7 @@ REF_GENOME = config["ref_genome"]
 # create lists containing the sample names and conditions
 samples = pd.read_csv(config["samples"], dtype=str, index_col=0, sep=",")
 SAMPLES = samples.index.values.tolist()
+print(SAMPLES)
 
 ###########################
 # Input functions for rules
@@ -38,11 +39,10 @@ SAMPLES = samples.index.values.tolist()
 
 def sample_is_single_end(sample):
     "This function detect missing value in the column 2 of the units.tsv"
-    if "fq2" in samples.columns:
-        return False
+    if "fq2" not in samples.columns:
+        return True
     else:
-        return False
-        #return pd.isnull(samples.loc[(sample), "fq2"])
+        return pd.isnull(samples.loc[(sample), "fq2"])
 
 def get_fastq(wildcards):
     """This function checks if the sample has paired end or single end reads and returns 1 or 2 names of the fastq files"""
@@ -68,6 +68,7 @@ def get_trim_names(wildcards):
 # Desired outputs
 #################
 MULTIQC = RESULT_DIR + "multiqc_report.html"
+VCF =  expand(WORKING_DIR + "gatk/{sample}.g.vcf.gz", sample=SAMPLES)
 ALL_VCFS = RESULT_DIR + "vcf/all_samples.vcf.gz"
 GATK_VCF = RESULT_DIR + "gatk/all_samples.gatk.vcf.gz"
 SNPEFF_ANNOTATED_VCF = RESULT_DIR + "snpeff/all_samples.snpeff.vcf"
@@ -76,11 +77,13 @@ VARIANT_TABLE = RESULT_DIR + "tables/all_samples.variants.tsv"
 
 rule all:
     input:
-        MULTIQC,
-        ALL_VCFS,
-        SNPEFF_ANNOTATED_VCF,
-        VARIANT_TABLE,
-        GATK_VCF
+         MULTIQC,
+         VCF,
+         ALL_VCFS,
+         SNPEFF_ANNOTATED_VCF,
+         VARIANT_TABLE,
+#         GATK_VCF,
+#         expand(WORKING_DIR + "samtools/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam", sample=SAMPLES)
     message:
         "BSA-seq pipeline run complete!"
     shell:
@@ -164,7 +167,7 @@ rule uncompress:
     message:
         "uncompressing {wildcards.sample} reads"
     run:
-        if sample_is_single_end("{wildcards.sample}"):
+        if sample_is_single_end("{sample}"):
             shell("gzip -cd {input.forward_fastq} > {output.forward_fastq};touch {output.reverse_fastq}")
         else:
             shell("gzip -cd {input.forward_fastq} > {output.forward_fastq}")
