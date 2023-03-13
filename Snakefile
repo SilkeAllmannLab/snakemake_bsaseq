@@ -1,5 +1,5 @@
 #########################################
-# Snakemake pipeline for RNA-Seq analysis
+# Snakemake pipeline for BSA-seq analysis
 #########################################
 
 
@@ -80,15 +80,14 @@ rule all:
          MULTIQC,
          VCF,
          ALL_VCFS,
-         SNPEFF_ANNOTATED_VCF,
-         VARIANT_TABLE,
-#         GATK_VCF,
-#         expand(WORKING_DIR + "samtools/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam", sample=SAMPLES)
+         SNPEFF_ANNOTATED_VCF,   # main output number 1
+         VARIANT_TABLE           # main output number 2
     message:
         "BSA-seq pipeline run complete!"
     shell:
         "cp config/config.yaml {RESULT_DIR};"
         "cp config/samples.csv {RESULT_DIR};"
+        "rm -r {WORKING_DIR}"
 
 #######
 # Rules
@@ -180,7 +179,7 @@ rule bwa_align:
         forward_fastq = WORKING_DIR + "trimmed/{sample}_forward.fastq",
         reverse_fastq = WORKING_DIR + "trimmed/{sample}_reverse.fastq"
     output:
-        temp(WORKING_DIR + "mapped/{sample}.bam")
+        WORKING_DIR + "mapped/{sample}.bam"
     message:
         "mapping {wildcards.sample} reads to genomic reference"
     params:
@@ -208,7 +207,7 @@ rule samtools_sort_by_qname:
     input:
         WORKING_DIR + "mapped/{sample}.bam"
     output:
-        temp(WORKING_DIR + "samtools/{sample}.qname_sorted.bam")
+        WORKING_DIR + "samtools/sort_qname/{sample}.qname_sorted.bam"
     message:
          "sorting {wildcards.sample} bam file by read name (QNAME field)"
     threads: 10
@@ -217,9 +216,9 @@ rule samtools_sort_by_qname:
 
 rule samtools_fixmate:
     input:
-        WORKING_DIR + "samtools/{sample}.qname_sorted.bam"
+        WORKING_DIR + "samtools/sort_qname/{sample}.qname_sorted.bam"
     output:
-        temp(WORKING_DIR + "samtools/{sample}.qname_sorted.fixed.bam")
+        WORKING_DIR + "samtools/fixmate/{sample}.qname_sorted.fixed.bam"
     message:
         "Fixing mate in {wildcards.sample} sorted bam file"
     threads: 10
@@ -228,9 +227,9 @@ rule samtools_fixmate:
 
 rule samtools_sort_by_coordinates:
     input:
-        WORKING_DIR + "samtools/{sample}.qname_sorted.fixed.bam"
+        WORKING_DIR + "samtools/fixmate/{sample}.qname_sorted.fixed.bam"
     output:
-        temp(WORKING_DIR + "samtools/{sample}.qname_sorted.fixed.coord_sorted.bam")
+        WORKING_DIR + "samtools/sort_coords/{sample}.qname_sorted.fixed.coord_sorted.bam"
     message:
         "sorting {wildcards.sample} bam file by coordinate"
     threads: 10
@@ -239,9 +238,9 @@ rule samtools_sort_by_coordinates:
 
 rule mark_duplicate:
     input:
-        WORKING_DIR + "samtools/{sample}.qname_sorted.fixed.coord_sorted.bam"
+        WORKING_DIR + "samtools/sort_coords/{sample}.qname_sorted.fixed.coord_sorted.bam"
     output:
-        WORKING_DIR + "samtools/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam"
+        WORKING_DIR + "samtools/dedup/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam"
     message:
         "marking duplicates in {wildcards.sample} bam file"
     threads: 10
@@ -266,7 +265,7 @@ rule prepare_fasta_for_gatk:
 
 rule call_variants_with_gatk:
     input:
-        bam = WORKING_DIR + "samtools/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam",
+        bam = WORKING_DIR + "samtools/dedup/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam",
         ref = REF_GENOME,
         ref_dict = rules.prepare_fasta_for_gatk.output.ref_dict
     output:
