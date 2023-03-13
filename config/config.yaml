@@ -8,7 +8,7 @@ fastq_dir:   config/fastq/  # location of fastq files
 samples: config/samples.csv
 
 # refs 
-ref_genome:  "config/refs/mutmap_ref.fasta" 
+ref_genome:  "config/refs/IRGSP-1.0_genome.chr09.fasta" 
 
 ##############################
 # fastp: read quality trimming

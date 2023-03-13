@@ -33,6 +33,14 @@ samples = pd.read_csv(config["samples"], dtype=str, index_col=0, sep=",")
 SAMPLES = samples.index.values.tolist()
 print(SAMPLES)
 
+
+####################################################################
+# Wildcards constraint (to deal with issues with dots in file names)
+####################################################################
+
+wildcard_constraints:
+    sample="[^.]" # dots are not allowed > https://stackoverflow.com/questions/4742357/how-to-match-only-strings-that-do-not-contain-a-dot-using-regular-expressions
+
 ###########################
 # Input functions for rules
 ###########################
@@ -77,9 +85,10 @@ VARIANT_TABLE = RESULT_DIR + "tables/all_samples.variants.tsv"
 
 rule all:
     input:
-         MULTIQC,
+        #MULTIQC,
          VCF,
          ALL_VCFS,
+         GATK_VCF,
          SNPEFF_ANNOTATED_VCF,   # main output number 1
          VARIANT_TABLE           # main output number 2
     message:
@@ -109,7 +118,7 @@ rule fastp:
     message:"trimming {wildcards.sample} reads"
     threads: 10
     log:
-        RESULT_DIR + "fastp/{sample}.log.txt"
+        WORKING_DIR + "fastp/{sample}.log.txt"
     params:
         sampleName = "{sample}",
         in_and_out_files =  get_trim_names,
@@ -207,7 +216,7 @@ rule samtools_sort_by_qname:
     input:
         WORKING_DIR + "mapped/{sample}.bam"
     output:
-        WORKING_DIR + "samtools/sort_qname/{sample}.qname_sorted.bam"
+        WORKING_DIR + "samtools/sort_qname/{sample}_qname_sorted.bam"
     message:
          "sorting {wildcards.sample} bam file by read name (QNAME field)"
     threads: 10
@@ -216,9 +225,9 @@ rule samtools_sort_by_qname:
 
 rule samtools_fixmate:
     input:
-        WORKING_DIR + "samtools/sort_qname/{sample}.qname_sorted.bam"
+        WORKING_DIR + "samtools/sort_qname/{sample}_qname_sorted.bam"
     output:
-        WORKING_DIR + "samtools/fixmate/{sample}.qname_sorted.fixed.bam"
+        WORKING_DIR + "samtools/fixmate/{sample}_qname_sorted_fixed.bam"
     message:
         "Fixing mate in {wildcards.sample} sorted bam file"
     threads: 10
@@ -227,20 +236,21 @@ rule samtools_fixmate:
 
 rule samtools_sort_by_coordinates:
     input:
-        WORKING_DIR + "samtools/fixmate/{sample}.qname_sorted.fixed.bam"
+        WORKING_DIR + "samtools/fixmate/{sample}_qname_sorted_fixed.bam"
     output:
-        WORKING_DIR + "samtools/sort_coords/{sample}.qname_sorted.fixed.coord_sorted.bam"
+        WORKING_DIR + "samtools/sort_coords/{sample}_qname_sorted_fixed_coord_sorted.bam"
     message:
         "sorting {wildcards.sample} bam file by coordinate"
     threads: 10
     shell:
         "samtools sort -@ {threads} {input} > {output}"
 
+
 rule mark_duplicate:
     input:
-        WORKING_DIR + "samtools/sort_coords/{sample}.qname_sorted.fixed.coord_sorted.bam"
+        WORKING_DIR + "samtools/sort_coords/{sample}_qname_sorted_fixed_coord_sorted.bam"
     output:
-        WORKING_DIR + "samtools/dedup/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam"
+        WORKING_DIR + "samtools/dedup/{sample}_qname_sorted_fixed_coord_sorted_dedup.bam"
     message:
         "marking duplicates in {wildcards.sample} bam file"
     threads: 10
@@ -265,7 +275,7 @@ rule prepare_fasta_for_gatk:
 
 rule call_variants_with_gatk:
     input:
-        bam = WORKING_DIR + "samtools/dedup/{sample}.qname_sorted.fixed.coord_sorted.dedup.bam",
+        bam = WORKING_DIR + "samtools/dedup/{sample}_qname_sorted_fixed_coord_sorted_dedup.bam",
         ref = REF_GENOME,
         ref_dict = rules.prepare_fasta_for_gatk.output.ref_dict
     output:
@@ -302,7 +312,7 @@ rule joint_genotypying_with_gatk:
 
 rule call_variants:
     input:
-        bam = WORKING_DIR + "mapped/{sample}.qname_sorted.fixed.coord_sorted.bam"
+        bam = WORKING_DIR + "mapped/{sample}_qname_sorted.fixed.coord_sorted.bam"
     output:
         vcf = WORKING_DIR + "vcf/{sample}.vcf.gz"
     message:
@@ -332,14 +342,14 @@ rule call_variants:
 
 rule index_variant_files:
     input:
-        vcf = RESULT_DIR + "vcf/{sample}.vcf.gz"
+        vcf = WORKING_DIR + "vcf/{sample}.vcf.gz"
     output:
-        index = RESULT_DIR + "vcf/{sample}.vcf.gz.csi"
+        index = WORKING_DIR + "vcf/{sample}.vcf.gz.csi"
     message:
         "Indexing {wildcards.sample} VCF file"
     shell:
         "bcftools index {input.vcf}"
-
+ 
 rule merge_all_variants: 
     input:
         vcfs = expand(WORKING_DIR + "vcf/{sample}.vcf.gz", sample=SAMPLES)

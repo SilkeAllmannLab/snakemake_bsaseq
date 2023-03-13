@@ -1,25 +1,33 @@
 # Snakemake BSA-seq pipeline
 
-A Snakemake pipeline to perform BSA-seq to identify causal the recessive mutation(s) underlying a mutant phenotype
+A Snakemake pipeline to perform BSA-seq (Next-Generation Sequencing Bulk Segregant Analysis) to identify causal the recessive mutation(s) underlying a phenotype.
+
+From Mansfeld et al. (2018) _Plant Genome_ 11(2). doi: 10.3835/plantgenome2018.01.0006. PMID: 30025013.  
+> The BSA-seq procedure is performed by establishing and phenotyping a segregating population and selecting individuals with high and low values for the trait of interest. DNA from these individuals is pooled into high and low bulks which are subject to sequencing and single nucleotide polymorphism (SNP) calling, thus mitigating a need to develop markers in advance. In bulks selected from F2 populations, SNPs detected in reads derived from regions not linked to the trait of interest should be present in ∼50% of the reads. However, SNPs in reads aligning to genomic regions closely linked to the trait should be over- or under-represented depending on the bulk. Thus, comparing relative allele depths, or SNP-indices (defined as the number of reads containing a SNP divided by the total sequencing depth at that SNP) between the bulks can allow quantitative trait loci (QTL) identification (Takagi et al., 2013).
+
+The output of the pipeline is a [GATK tab-delimited variant file](https://gatk.broadinstitute.org/hc/en-us/articles/360036896892-VariantsToTable) containing all SNP information from all samples. This can then be used with the [QTLseqR package](https://github.com/bmansfeld/QTLseqr/blob/master/vignettes/QTLseqr.pdf).   
+The input of QTLseqr is the variant table as produced by the GATK `VariantsToTable` function. 
 
 <!-- MarkdownTOC autolink="true" -->
 
-- [1. Installation 🔨](#1-installation-%F0%9F%94%A8)
+- [Snakemake BSA-seq pipeline](#snakemake-bsa-seq-pipeline)
+- [1. Installation 🔨](#1-installation-)
 	- [1.1 Install Miniconda and mamba](#11-install-miniconda-and-mamba)
 	- [1.2 Clone the pipeline repository :cat:](#12-clone-the-pipeline-repository-cat)
 	- [1.3 Install the Snakemake pipeline dependencies](#13-install-the-snakemake-pipeline-dependencies)
-- [2. Test run 🧪](#2-test-run-%F0%9F%A7%AA)
+- [2. Test run 🧪](#2-test-run-)
 	- [2.1 Fastq test files](#21-fastq-test-files)
 	- [2.2 Reference genome](#22-reference-genome)
 	- [2.3 Change default parameters if needed](#23-change-default-parameters-if-needed)
 	- [2.4 Run the pipeline](#24-run-the-pipeline)
 - [3. Graphs](#3-graphs)
-	- [For each sample \(including reference sample\)](#for-each-sample-including-reference-sample)
+	- [For each sample (including reference sample)](#for-each-sample-including-reference-sample)
 	- [For one given sample](#for-one-given-sample)
-- [4. References 📖](#4-references-%F0%9F%93%96)
-	- [MutMap software](#mutmap-software)
+- [4. References 📖](#4-references-)
+	- [QTLseqR software](#qtlseqr-software)
 	- [Snakemake](#snakemake)
 	- [SnpEff](#snpeff)
+	- [VCF format specifications](#vcf-format-specifications)
 
 <!-- /MarkdownTOC -->
 
@@ -36,6 +44,8 @@ Once `conda` is installed, you can get `mamba` easily in your default (base) con
 
 `conda install mamba -n base -c conda-forge --yes`
 
+mamba is a much quicker alternative to conda with most commands being the same (replace "conda" by "mamba").
+
 ## 1.2 Clone the pipeline repository :cat:
 
 From GitHub, copy the repo link: `https://github.com/SilkeAllmannLab/snakemake_bsaseq.git`
@@ -51,19 +61,21 @@ Place yourself in the `snakemake_bsaseq/` folder and run:
 
 # 2. Test run 🧪
 
-The test run reproduces the Sorghum _male sterile 9_ causal mutation identification example (Chen, J. et al. (2019a) Identification of the first nuclear male sterility gene (male-sterile 9) in sorghum. Plant Genome, 12, 190020).  
+The test run reproduces the BSA-seq analysis to identify a QTL related to rice plant height coined _qPH9_ in the original study of Xin et al. 2022.
+
+__Reference:__ Xin W, Liu H, Yang L, Ma T, Wang J, Zheng H, Liu W, Zou D. BSA-Seq and Fine Linkage Mapping for the Identification of a Novel Locus (qPH9) for Mature Plant Height in Rice (Oryza sativa). Rice (N Y). 2022 May 20;15(1):26. doi: [10.1186/s12284-022-00576-2](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9123124/). PMID: 35596038; PMCID: PMC9123124.
 
 ## 2.1 Fastq test files
 
-The test fastq files are available from the [MutMap GitHub repository](https://github.com/YuSugihara/MutMap/tree/master/test) or from [Zenodo here](https://zenodo.org/record/5710370) (for stable archiving)
+The test fastq files are available from the [Zenodo here](https://zenodo.org/record/5710370). The BSA-seq data for this study can be found in the National Center for Biotechnology Information Sequence Read Archive under the accession numbers SSRR13306959 (low plant height) and SRR13306960 (high plant height) under project number [PRJNA687818](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA687818). A subset (10%) of SSRR13306959 and SRR13306960 were made for test purposes. 
 
-Download the paired-end fastq files for both cultivar and bulk mutant and place them inside the `config/fastq/` folder (create it if necessary).  
+Download the paired-end fastq files for both high height and low height individual pools and place them inside the `config/fastq/` folder (create it if necessary).  
 
 ## 2.2 Reference genome 
 
-The `mutmap_ref.fasta` file is used as the `--ref` argument in MutMap. 
+The rice genome reference assembly used is [Os-Nipponbare-Reference-IRGSP-1.0](https://rapdb.dna.affrc.go.jp/download/archive/irgsp1/IRGSP-1.0_genome.fasta.gz) that can be downloaded from the [Rice Annotation Project Database](https://rapdb.dna.affrc.go.jp/download/irgsp1.html).
 
-The reference assembly used is [Sorghum_bicolor_NCBIv3](https://www.ncbi.nlm.nih.gov/assembly/GCF_000003195.3). 
+The path to the genome should be added to the `config.yaml` file in the `ref_genome` argument. By default the chromosome 09 of the rice genome is used since the _qPH9_ QTL identified is located on chromosome 9. 
 
 ## 2.3 Change default parameters if needed
 
@@ -95,11 +107,11 @@ These graphs display the order of tasks from beginning to end.
 
 # 4. References 📖
 
-## MutMap software
+## QTLseqR software
 
-* [GitHub link](https://github.com/YuSugihara/MutMap)
+* [GitHub link](https://github.com/bmansfeld/QTLseqr)
 
-* Citation: Akira Abe, Shunichi Kosugi, Kentaro Yoshida, Satoshi Natsume, Hiroki Takagi, Hiroyuki Kanzaki, Hideo Matsumura, Kakoto Yoshida, Chikako Mitsuoka, Muluneh Tamiru, Hideki Innan, Liliana Cano, Sophien Kamoun & Ryohei Terauchi (2012). Genome sequencing reveals agronomically important loci in rice using MutMap. Nature Biotechnol. 30:174-179.
+* Citation: Mansfeld BN, Grumet R. QTLseqr: An R Package for Bulk Segregant Analysis with Next-Generation Sequencing. Plant Genome. 2018 Jul;11(2). doi: 10.3835/plantgenome2018.01.0006. PMID: 30025013.
 
 ## Snakemake 
 
