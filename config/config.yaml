@@ -27,23 +27,20 @@ bcftools:
   adjust_mq:   '50'                 # "adjust-MQ" in mpileup. Default parameter is suited for BWA. [50]
   max_depth:   '1000'               # number of reads to be considered per position. Default of mpileup is 250 which is a bit low
 
-#########
-# Mutplot
-#########
-
-mutmap:
-  window_size: '2000'               # window size in kb (default is 2000) [2000]
-  step_size:   '100'                # step size in kb (default 100) [100]   
-  max_depth:   '250'                # Maximum depth of variants which will be used. This cutoff will be applied in both of cultivar and bulk. [250]
-  min_depth:   '8'                  # Minimum depth of variants which will be used. This cutoff will be applied in both of cultivar and bulk. [8]
-  n_rep:       '5000'               # number of replicates for simulation to make the null distribution [5000]
- 
-
 ###########
 # snpEff
 ##########
 
+# Arabidopsis thaliana parameters for snpEff
+# database_url: https://snpeff.blob.core.windows.net/databases/v5_0/snpEff_v5_0_Arabidopsis_thaliana.zip
+# database: "Arabidopsis thaliana"
+
+# Oryza sativa parameters for snpEff
+# database_url: https://snpeff.blob.core.windows.net/databases/v5_0/snpEff_v5_0_snpEff_v5_0_Oryza_sativa.zip
+# database: "Oryza_sativa"
+
+
 snpeff:
-  database_url: https://snpeff.blob.core.windows.net/databases/v5_0/snpEff_v5_0_Arabidopsis_thaliana.zip # only for data provenance
-  database: "Arabidopsis_thaliana" # corresponds to the database above >> check in /miniconda3/envs/bsaseq/share/snpeff-5.0-1/snpEff.config
+  database_url: https://snpeff.blob.core.windows.net/databases/v5_0/snpEff_v5_0_Oryza_sativa.zip # only for data provenance
+  database: "Oryza sativa" # corresponds to the database above >> check in /miniconda3/envs/bsaseq/share/snpeff-5.0-1/snpEff.config
   output_format: "vcf"
