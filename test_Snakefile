@@ -79,12 +79,15 @@ BAMS = expand(WORKING_DIR + "mapped/{sample}.bam", sample=SAMPLES)
 CLEAN_BAMS = expand(WORKING_DIR + "samtools/dedup/{sample}_qname_sorted_fixed_coord_sorted_dedup.bam", sample=SAMPLES)
 
 GCVFs = expand(WORKING_DIR + "gatk/{sample}.g.vcf.gz", sample=SAMPLES)
-VCF = RESULT_DIR + "all_samples.vcf.gz"
+VCF = RESULT_DIR + "vcf/all_samples.vcf.gz"
+VCF_TABLE = RESULT_DIR + "all_samples.variants.tsv"
 
 rule all:
     input:
          MULTIQC, BAMS, CLEAN_BAMS,
-         GCVFs, VCF
+         GCVFs, 
+         VCF, 
+         VCF_TABLE # suitable for QTLseqR
     message:
         "BSA-seq pipeline run complete!"
     shell:
@@ -314,7 +317,7 @@ rule joint_genotypying_with_gatk:
         combined_gvcf = WORKING_DIR + "gatk/all_samples.gatk.vcf.gz",
         ref =  REF_GENOME
     output:
-        vcf = RESULT_DIR + "all_samples.vcf.gz"
+        vcf = RESULT_DIR + "vcf/all_samples.vcf.gz"
     message:
         "Joint cohort variant calling (GATK GenotypeGVCFs)"
     shell:
@@ -322,3 +325,25 @@ rule joint_genotypying_with_gatk:
         "-R {input.ref} "
         "--variant {input.combined_gvcf} "
         "-O {output.vcf}"
+
+
+###########################
+# prepare table for QTLseqR
+###########################
+
+rule convert_variants_to_table:
+    input:
+        picard_dict = rules.prepare_fasta_for_gatk.output.ref_dict, # picard dict
+        vcf = RESULT_DIR + "vcf/all_samples.vcf.gz",
+        ref_genome = REF_GENOME
+    output:
+        table = RESULT_DIR + "all_samples.variants.tsv"
+    message:
+        "Converting VCF from all samples to table for QTLseqR"
+    shell:
+        "gatk VariantsToTable "
+        "-V {input.vcf} "
+        "-F CHROM -F POS -F REF -F ALT "
+        "-GF AD -GF DP -GF GQ -GF PL "
+        "-R {input.ref_genome} "
+        "-O {output.table}"
