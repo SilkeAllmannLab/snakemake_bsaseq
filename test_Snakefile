@@ -291,8 +291,7 @@ rule joint_genotypying_with_gatk:
     message:
         "Joint cohort variant calling with GATK"
     shell:
-        "gatk HaplotypeCaller  "
+        "gatk CombineGVCFs  "
         "-R {input.ref} "
-        "-I {input.gvcfs} "
-        "-O {output.gvcf} "
-        "-ERC GVCF "
+        "--variant {input.gvcfs} "
+        "-O {output.gvcf}"
