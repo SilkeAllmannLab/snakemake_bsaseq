@@ -79,12 +79,12 @@ BAMS = expand(WORKING_DIR + "mapped/{sample}.bam", sample=SAMPLES)
 CLEAN_BAMS = expand(WORKING_DIR + "samtools/dedup/{sample}_qname_sorted_fixed_coord_sorted_dedup.bam", sample=SAMPLES)
 
 GCVFs = expand(WORKING_DIR + "gatk/{sample}.g.vcf.gz", sample=SAMPLES)
-GATK_VCF = RESULT_DIR + "gatk/all_samples.gatk.vcf.gz"
+VCF = RESULT_DIR + "all_samples.vcf.gz"
 
 rule all:
     input:
          MULTIQC, BAMS, CLEAN_BAMS,
-         GCVFs, GATK_VCF
+         GCVFs, VCF
     message:
         "BSA-seq pipeline run complete!"
     shell:
@@ -274,7 +274,7 @@ rule call_variants_with_gatk:
     output:
         gvcf = WORKING_DIR + "gatk/{sample}.g.vcf.gz"
     message:
-        "Calling {wildcards.sample} variants with GATK"
+        "Calling {wildcards.sample} variants (GATK HaplotypeCaller)"
     shell:
         "gatk HaplotypeCaller  "
         "-R {input.ref} "
@@ -295,17 +295,30 @@ rule create_list_of_gvcf_files_for_joint_genotyping:
         "find {params.path_to_gvcf_files} -type f -name '*.g.vcf.gz' > {output}"
 
 
-rule joint_genotypying_with_gatk:
+rule combine_gvcf_files:
     input:
         gvcf_list = WORKING_DIR + "gatk/gvcfs.list",
-        ref = REF_GENOME
+        ref =       REF_GENOME
     output:
-        gvcf = RESULT_DIR + "gatk/all_samples.gatk.vcf.gz"
+        combined_gvcf = WORKING_DIR + "gatk/all_samples.gatk.vcf.gz"
     message:
-        "Joint cohort variant calling with GATK"
+        "Combine individual GVCF files (GATK CombineGVCFs)"
     shell:
         "gatk CombineGVCFs "
         "-R {input.ref} "
         "--variant {input.gvcf_list} "
-        "-O {output.gvcf}"
+        "-O {output.combined_gvcf}"
 
+rule joint_genotypying_with_gatk:
+    input:
+        combined_gvcf = WORKING_DIR + "gatk/all_samples.gatk.vcf.gz",
+        ref =  REF_GENOME
+    output:
+        vcf = RESULT_DIR + "all_samples.vcf.gz"
+    message:
+        "Joint cohort variant calling (GATK GenotypeGVCFs)"
+    shell:
+        "gatk GenotypeGVCFs "
+        "-R {input.ref} "
+        "--variant {input.combined_gvcf} "
+        "-O {output.vcf}"
