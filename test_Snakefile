@@ -282,15 +282,30 @@ rule call_variants_with_gatk:
         "-O {output.gvcf} "
         "-ERC GVCF "
  
+rule create_list_of_gvcf_files_for_joint_genotyping:
+    input:
+        gvcfs = expand(WORKING_DIR + "gatk/{sample}.g.vcf.gz", sample=SAMPLES) 
+    output:
+        gvcf_list = WORKING_DIR + "gatk/gvcfs.list"
+    params:
+        path_to_gvcf_files = WORKING_DIR + "gatk/"
+    message:
+        "Creating list of individual GVCF files for joint genotyping"
+    shell:
+        "find {params.path_to_gvcf_files} -type f -name '*.g.vcf.gz' > {output}"
+
+
 rule joint_genotypying_with_gatk:
     input:
-        gvcfs = expand(WORKING_DIR + "gatk/{sample}.g.vcf.gz", sample=SAMPLES),
+        gvcf_list = WORKING_DIR + "gatk/gvcfs.list",
         ref = REF_GENOME
     output:
         gvcf = RESULT_DIR + "gatk/all_samples.gatk.vcf.gz"
     message:
         "Joint cohort variant calling with GATK"
-    run:
-        cmd_to_run = "gatk CombineGVCFs  -R {input.ref} " + " --variant " + input.gvcfs[0] + " --variant " + input.gvcfs[1] + "-O {output.gvcf}"
-        subprocess.call(cmd_to_run, shell=True)
+    shell:
+        "gatk CombineGVCFs "
+        "-R {input.ref} "
+        "--variant {input.gvcf_list} "
+        "-O {output.gvcf}"
 
