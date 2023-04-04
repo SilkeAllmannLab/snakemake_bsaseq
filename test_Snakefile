@@ -79,11 +79,12 @@ BAMS = expand(WORKING_DIR + "mapped/{sample}.bam", sample=SAMPLES)
 CLEAN_BAMS = expand(WORKING_DIR + "samtools/dedup/{sample}_qname_sorted_fixed_coord_sorted_dedup.bam", sample=SAMPLES)
 
 GCVFs = expand(WORKING_DIR + "gatk/{sample}.g.vcf.gz", sample=SAMPLES)
+GATK_VCF = RESULT_DIR + "gatk/all_samples.gatk.vcf.gz"
 
 rule all:
     input:
          MULTIQC, BAMS, CLEAN_BAMS,
-         GCVFs
+         GCVFs, GATK_VCF
     message:
         "BSA-seq pipeline run complete!"
     shell:
