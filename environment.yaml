@@ -5,11 +5,9 @@ channels:
   - defaults
 dependencies:
   - snakemake = 5.20.0
-  - mutmap = 2.3.3
   - fastp = 0.19.5
   - multiqc = 1.11
   - pyyaml = 6.0
-  - snpeff = 5.0
   - samtools = 1.10
   - bwa = 0.7.15
   - gatk4 = 4.2.0.0
