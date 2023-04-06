@@ -1,0 +1,73 @@
+---
+title: "Example QTLseqr analysis"
+author: "Marc Galland"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+# Setup 
+
+## Libraries
+
+QTLseqr_0.7.5.2 was used. 
+tidyverse_1.3.0 was used. 
+
+```{r}
+library("QTLseqr")
+library("tidyverse")
+```
+
+## Data
+
+SRR13306959 comes from a pool of F2 plants with low height.   
+SRR13306960 comes from a pool of F2 plants with a high height.   
+
+```{r}
+# Small file with only chromosome 09
+#file_to_read <- "rice_variants_chromosome_09.tsv"
+
+file_to_read <- "rice.variants.tsv"
+
+df <- importFromGATK(file = file_to_read, 
+                     highBulk = "SRR13306960", 
+                     lowBulk = "SRR13306959") %>% 
+  na.omit()
+```
+
+# QC
+
+## Read depth 
+```{r}
+ggplot(df, aes(x= DP.HIGH + DP.LOW)) + geom_histogram(bins=100) 
+```
+
+## High Bulk
+
+```{r}
+ggplot(df, aes(x = SNPindex.HIGH)) + geom_histogram(bins = 10)
+```
+This should be centered on 0.50 for an F2 population.
+
+# Filter SNPs
+
+```{r}
+df_filt <- filterSNPs(SNPset = df, 
+                      refAlleleFreq = 0.20, 
+                      minTotalDepth = 10, 
+                      maxTotalDepth = 400, 
+                      depthDifference = 500, 
+                      verbose = TRUE)
+```
+
+```{r}
+#df_filt <- runQTLseqAnalysis(SNPset = df_filt, windowSize = 1e6, popStruc = "F2", bulkSize = c(40,40))
+#plotQTLStats(SNPset = df_filt)
+```
+
+```{r}
+runGprimeAnalysis(SNPset = df_filt, windowSize = 1e6, outlierFilter = "Hampel")
+```
+```{r}
+plotQTLStats(SNPset = df_filt)
+```
+

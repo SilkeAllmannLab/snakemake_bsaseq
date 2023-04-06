@@ -106,7 +106,7 @@ These graphs display the order of tasks from beginning to end.
 
 # 4. Downstream analysis with QTLseqR 
 
-An example variant table file and an example R script for QTL-seq analysis with [QTLseqr](https://github.com/bmansfeld/QTLseqr) is available in the `qtlseqr/` folder.
+An example variant table file called `rice.variants.tsv.gz` and an example R script for QTL-seq analysis with [QTLseqr](https://github.com/bmansfeld/QTLseqr) is available in the `qtlseqr/` folder.
 
 # 5. References 📖
 
