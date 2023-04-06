@@ -17,30 +17,4 @@ ref_genome:  "config/refs/IRGSP-1.0_genome.chr09.fasta"
 fastp:
   qualified_quality_phred: 30 # Phred+33 score (> 15 for Proton Ion, > 30 or more for Illumina) 
 
-#################
-# Variant calling
-#################
 
-bcftools:
-  min_mq:      '40'                 # minimum mapping quality in mpileup. [40]
-  min_bq:      '18'                 # minimum base quality in mpileup. [18]
-  adjust_mq:   '50'                 # "adjust-MQ" in mpileup. Default parameter is suited for BWA. [50]
-  max_depth:   '1000'               # number of reads to be considered per position. Default of mpileup is 250 which is a bit low
-
-###########
-# snpEff
-##########
-
-# Arabidopsis thaliana parameters for snpEff
-# database_url: https://snpeff.blob.core.windows.net/databases/v5_0/snpEff_v5_0_Arabidopsis_thaliana.zip
-# database: "Arabidopsis thaliana"
-
-# Oryza sativa parameters for snpEff
-# database_url: https://snpeff.blob.core.windows.net/databases/v5_0/snpEff_v5_0_snpEff_v5_0_Oryza_sativa.zip
-# database: "Oryza_sativa"
-
-
-snpeff:
-  database_url: https://snpeff.blob.core.windows.net/databases/v5_0/snpEff_v5_0_Oryza_sativa.zip # only for data provenance
-  database: "Oryza sativa" # corresponds to the database above >> check in /miniconda3/envs/bsaseq/share/snpeff-5.0-1/snpEff.config
-  output_format: "vcf"

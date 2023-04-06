@@ -1,6 +1,6 @@
 # Snakemake BSA-seq pipeline
 
-A Snakemake pipeline to perform BSA-seq (Next-Generation Sequencing Bulk Segregant Analysis) to identify causal the recessive mutation(s) underlying a phenotype.
+A Snakemake pipeline to perform QTL mapping using Next Generation Sequencing Bulk Segregant Analysis (BSA-seq) to identify QTLs underlying a phenotype.
 
 From Mansfeld et al. (2018) _Plant Genome_ 11(2). doi: 10.3835/plantgenome2018.01.0006. PMID: 30025013.  
 > The BSA-seq procedure is performed by establishing and phenotyping a segregating population and selecting individuals with high and low values for the trait of interest. DNA from these individuals is pooled into high and low bulks which are subject to sequencing and single nucleotide polymorphism (SNP) calling, thus mitigating a need to develop markers in advance. In bulks selected from F2 populations, SNPs detected in reads derived from regions not linked to the trait of interest should be present in ∼50% of the reads. However, SNPs in reads aligning to genomic regions closely linked to the trait should be over- or under-represented depending on the bulk. Thus, comparing relative allele depths, or SNP-indices (defined as the number of reads containing a SNP divided by the total sequencing depth at that SNP) between the bulks can allow quantitative trait loci (QTL) identification (Takagi et al., 2013).
@@ -23,10 +23,10 @@ The input of QTLseqr is the variant table as produced by the GATK `VariantsToTab
 - [3. Graphs](#3-graphs)
 	- [For each sample (including reference sample)](#for-each-sample-including-reference-sample)
 	- [For one given sample](#for-one-given-sample)
-- [4. References 📖](#4-references-)
+- [4. Downstream analysis with QTLseqR](#4-downstream-analysis-with-qtlseqr)
+- [5. References 📖](#5-references-)
 	- [QTLseqR software](#qtlseqr-software)
 	- [Snakemake](#snakemake)
-	- [SnpEff](#snpeff)
 	- [VCF format specifications](#vcf-format-specifications)
 
 <!-- /MarkdownTOC -->
@@ -67,7 +67,7 @@ __Reference:__ Xin W, Liu H, Yang L, Ma T, Wang J, Zheng H, Liu W, Zou D. BSA-Se
 
 ## 2.1 Fastq test files
 
-The test fastq files are available from the [Zenodo here](https://zenodo.org/record/5710370). The BSA-seq data for this study can be found in the National Center for Biotechnology Information Sequence Read Archive under the accession numbers SSRR13306959 (low plant height) and SRR13306960 (high plant height) under project number [PRJNA687818](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA687818). A subset (10%) of SSRR13306959 and SRR13306960 were made for test purposes. 
+The test fastq files are available from the [Zenodo here](https://zenodo.org/record/7728260). The BSA-seq data for this study can be found in the National Center for Biotechnology Information Sequence Read Archive under the accession numbers SRR13306959 (low plant height) and SRR13306960 (high plant height) under project number [PRJNA687818](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA687818). A subset (10%) of SSRR13306959 and SRR13306960 were made for test purposes. 
 
 Download the paired-end fastq files for both high height and low height individual pools and place them inside the `config/fastq/` folder (create it if necessary).  
 
@@ -82,17 +82,17 @@ The path to the genome should be added to the `config.yaml` file in the `ref_gen
 1. The pipeline parameters are visible in `config/config.yaml` and can be edited before the run is executed.   
 2. Change the file path to your fastq files for the bulk mutant in `config/samples.csv`.  
 
-:warning: In the `samples.csv` file, columns have to be named `sample_name`, `sample_type` , `n_individuals`, `fq1`,`fq2`. 
-The `sample_type` has to contain either `reference` or `mutant` and nothing else. 
+:warning: In the `samples.csv` file, columns have to be named `sample`, `fq1`,`fq2`. 
 
 ## 2.4 Run the pipeline 
 
 1. Activate the required environment to have all dependencies accessible in your $PATH: `conda activate bsaseq`    
 2. Execute the pipeline: `snakemake -j 1` (specify N threads with `-j N`).  
 
-On a cluster managed with SLURM such as the [UvA-FNWI crunchomics](https://crunchomics-documentation.readthedocs.io/en/latest/), if you specify 10 CPUs you can run with:  
-1. `srun --time=12:00:00 --cpus-per-task=10 --mem-per-cpu=8G --pty bash -i`  followed by:  
-2. `conda activate bsaseq && snakemake -j 10`
+On a cluster managed with SLURM such as the [UvA-FNWI crunchomics](https://crunchomics-documentation.readthedocs.io/en/latest/), if you specify 10 CPUs you can run with:    
+`conda activate bsaseq && sbatch -J qtlseq --time=24:00:00 --cpus-per-task=10 --mem-per-cpu=4G snakemake -j 10`
+
+This will (1) activate the bsaseq conda environment with all softwares required and (2) submit a SLURM job named "bsaseq" with 10 cpus and 4Gb of RAM per CPU. 
 
 # 3. Graphs
 
@@ -102,10 +102,13 @@ These graphs display the order of tasks from beginning to end.
 ![dag graph](./dag.png)
 
 ## For one given sample
-![dag graph](./rulegraph_dag.png)
+![dag graph](./rulegraph.png)
 
+# 4. Downstream analysis with QTLseqR 
 
-# 4. References 📖
+An example variant table file and an example R script for QTL-seq analysis with [QTLseqr](https://github.com/bmansfeld/QTLseqr) is available in the `qtlseqr/` folder.
+
+# 5. References 📖
 
 ## QTLseqR software
 
@@ -118,13 +121,6 @@ These graphs display the order of tasks from beginning to end.
 * [Snakemake Documentation](https://snakemake.github.io/)
 
 * Citation: Mölder, F., Jablonski, K.P., Letcher, B., Hall, M.B., Tomkins-Tinch, C.H., Sochat, V., Forster, J., Lee, S., Twardziok, S.O., Kanitz, A., Wilm, A., Holtgrewe, M., Rahmann, S., Nahnsen, S., Köster, J., 2021. Sustainable data analysis with Snakemake. F1000Res 10, 33. [Link](https://f1000research.com/articles/10-33/v2). 
-
-
-## SnpEff
-
-* [Documentation](https://pcingola.github.io/SnpEff/)
-
-* Citation: "A program for annotating and predicting the effects of single nucleotide polymorphisms, SnpEff: SNPs in the genome of Drosophila melanogaster strain w1118; iso-2; iso-3.", Cingolani P, Platts A, Wang le L, Coon M, Nguyen T, Wang L, Land SJ, Lu X, Ruden DM. Fly (Austin). 2012 Apr-Jun;6(2):80-92. PMID: 22728672
 
 ## VCF format specifications
 
